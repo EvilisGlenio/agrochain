@@ -109,4 +109,53 @@ describe("AgroToken", function () {
       );
     });
   });
+
+  describe("pausing", function () {
+    it("blocks transfer while paused", async function () {
+      const { token, admin, user } = await loadFixture(deployAgroTokenFixture);
+      const transferAmount = ethers.parseUnits("100", 18);
+
+      await token.connect(admin).pause();
+
+      await expect(token.connect(admin).transfer(user.address, transferAmount)).to.be.revertedWithCustomError(
+        token,
+        "EnforcedPause"
+      );
+    });
+
+    it("blocks transferFrom while paused", async function () {
+      const { token, admin, user } = await loadFixture(deployAgroTokenFixture);
+      const transferAmount = ethers.parseUnits("100", 18);
+
+      await token.connect(admin).approve(user.address, transferAmount);
+      await token.connect(admin).pause();
+
+      await expect(
+        token.connect(user).transferFrom(admin.address, user.address, transferAmount)
+      ).to.be.revertedWithCustomError(token, "EnforcedPause");
+    });
+
+    it("blocks mint while paused", async function () {
+      const { token, admin, user } = await loadFixture(deployAgroTokenFixture);
+      const mintAmount = ethers.parseUnits("100", 18);
+
+      await token.connect(admin).pause();
+
+      await expect(token.connect(admin).mint(user.address, mintAmount)).to.be.revertedWithCustomError(
+        token,
+        "EnforcedPause"
+      );
+    });
+
+    it("allows transfers again after unpause", async function () {
+      const { token, admin, user } = await loadFixture(deployAgroTokenFixture);
+      const transferAmount = ethers.parseUnits("100", 18);
+
+      await token.connect(admin).pause();
+      await token.connect(admin).unpause();
+      await token.connect(admin).transfer(user.address, transferAmount);
+
+      expect(await token.balanceOf(user.address)).to.equal(transferAmount);
+    });
+  });
 });
