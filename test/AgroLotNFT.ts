@@ -43,4 +43,59 @@ describe("AgroLotNFT", function () {
       await expect(AgroLotNFT.deploy(ethers.ZeroAddress)).to.be.revertedWith("invalid admin");
     });
   });
+
+  describe("access control", function () {
+    it("allows accounts with MINTER_ROLE to mint lots", async function () {
+      const { nft, admin } = await loadFixture(deployAgroLotNFTFixture);
+
+      await nft.connect(admin).mintLot("https://example.com/lots/0.json", "queijo");
+
+      expect(await nft.ownerOf(0n)).to.equal(admin.address);
+    });
+
+    it("reverts mintLot for accounts without MINTER_ROLE", async function () {
+      const { nft, user } = await loadFixture(deployAgroLotNFTFixture);
+
+      await expect(
+        nft.connect(user).mintLot("https://example.com/lots/0.json", "queijo")
+      ).to.be.revertedWithCustomError(nft, "AccessControlUnauthorizedAccount");
+    });
+
+    it("allows accounts with PAUSER_ROLE to pause", async function () {
+      const { nft, admin } = await loadFixture(deployAgroLotNFTFixture);
+
+      await nft.connect(admin).pause();
+
+      expect(await nft.paused()).to.equal(true);
+    });
+
+    it("reverts pause for accounts without PAUSER_ROLE", async function () {
+      const { nft, user } = await loadFixture(deployAgroLotNFTFixture);
+
+      await expect(nft.connect(user).pause()).to.be.revertedWithCustomError(
+        nft,
+        "AccessControlUnauthorizedAccount"
+      );
+    });
+
+    it("allows accounts with PAUSER_ROLE to unpause", async function () {
+      const { nft, admin } = await loadFixture(deployAgroLotNFTFixture);
+
+      await nft.connect(admin).pause();
+      await nft.connect(admin).unpause();
+
+      expect(await nft.paused()).to.equal(false);
+    });
+
+    it("reverts unpause for accounts without PAUSER_ROLE", async function () {
+      const { nft, admin, user } = await loadFixture(deployAgroLotNFTFixture);
+
+      await nft.connect(admin).pause();
+
+      await expect(nft.connect(user).unpause()).to.be.revertedWithCustomError(
+        nft,
+        "AccessControlUnauthorizedAccount"
+      );
+    });
+  });
 });
