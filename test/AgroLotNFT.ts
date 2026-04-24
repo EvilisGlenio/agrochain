@@ -98,4 +98,67 @@ describe("AgroLotNFT", function () {
       );
     });
   });
+
+  describe("minting", function () {
+    it("creates the first lot with tokenId zero", async function () {
+      const { nft, admin } = await loadFixture(deployAgroLotNFTFixture);
+
+      await nft.connect(admin).mintLot("https://example.com/lots/0.json", "queijo");
+
+      expect(await nft.ownerOf(0n)).to.equal(admin.address);
+    });
+
+    it("increments nextTokenId after each mint", async function () {
+      const { nft, admin } = await loadFixture(deployAgroLotNFTFixture);
+
+      await nft.connect(admin).mintLot("https://example.com/lots/0.json", "queijo");
+      expect(await nft.nextTokenId()).to.equal(1n);
+
+      await nft.connect(admin).mintLot("https://example.com/lots/1.json", "cafe");
+      expect(await nft.nextTokenId()).to.equal(2n);
+    });
+
+    it("stores the correct tokenURI", async function () {
+      const { nft, admin } = await loadFixture(deployAgroLotNFTFixture);
+      const uri = "https://example.com/lots/0.json";
+
+      await nft.connect(admin).mintLot(uri, "queijo");
+
+      expect(await nft.tokenURI(0n)).to.equal(uri);
+    });
+
+    it("stores the lot data on-chain", async function () {
+      const { nft, admin } = await loadFixture(deployAgroLotNFTFixture);
+      const productType = "queijo";
+
+      await nft.connect(admin).mintLot("https://example.com/lots/0.json", productType);
+
+      const lot = await nft.lots(0n);
+
+      expect(lot.producer).to.equal(admin.address);
+      expect(lot.productType).to.equal(productType);
+      expect(lot.createdAt).to.be.greaterThan(0n);
+    });
+
+    it("emits LotMinted with the expected arguments", async function () {
+      const { nft, admin } = await loadFixture(deployAgroLotNFTFixture);
+      const uri = "https://example.com/lots/0.json";
+      const productType = "queijo";
+
+      await expect(nft.connect(admin).mintLot(uri, productType))
+        .to.emit(nft, "LotMinted")
+        .withArgs(0n, admin.address, uri, productType);
+    });
+
+    it("assigns sequential token IDs across multiple mints", async function () {
+      const { nft, admin } = await loadFixture(deployAgroLotNFTFixture);
+
+      await nft.connect(admin).mintLot("https://example.com/lots/0.json", "queijo");
+      await nft.connect(admin).mintLot("https://example.com/lots/1.json", "cafe");
+
+      expect(await nft.ownerOf(0n)).to.equal(admin.address);
+      expect(await nft.ownerOf(1n)).to.equal(admin.address);
+      expect(await nft.nextTokenId()).to.equal(2n);
+    });
+  });
 });
