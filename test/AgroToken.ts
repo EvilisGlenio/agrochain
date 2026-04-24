@@ -1,6 +1,7 @@
 import { loadFixture } from "@nomicfoundation/hardhat-toolbox/network-helpers";
 import { expect } from "chai";
 import hre from "hardhat";
+import { AgroToken__factory } from "../typechain-types";
 
 const { ethers } = hre;
 
@@ -9,8 +10,9 @@ describe("AgroToken", function () {
     const [admin, user] = await ethers.getSigners();
     const initialSupply = ethers.parseUnits("100000", 18);
 
-    const AgroToken = await ethers.getContractFactory("AgroToken");
-    const token = await AgroToken.deploy(admin.address, initialSupply);
+    const token = await new AgroToken__factory(admin).deploy(admin.address, initialSupply);
+
+    await token.waitForDeployment();
 
     return { token, admin, user, initialSupply };
   }
@@ -45,6 +47,65 @@ describe("AgroToken", function () {
 
       await expect(AgroToken.deploy(ethers.ZeroAddress, initialSupply)).to.be.revertedWith(
         "invalid admin"
+      );
+    });
+  });
+
+  describe("access control", function () {
+    it("allows accounts with MINTER_ROLE to mint", async function () {
+      const { token, admin, user } = await loadFixture(deployAgroTokenFixture);
+      const mintAmount = ethers.parseUnits("1000", 18);
+
+      await token.connect(admin).mint(user.address, mintAmount);
+
+      expect(await token.balanceOf(user.address)).to.equal(mintAmount);
+      expect(await token.totalSupply()).to.equal((await token.balanceOf(admin.address)) + mintAmount);
+    });
+
+    it("reverts mint for accounts without MINTER_ROLE", async function () {
+      const { token, user } = await loadFixture(deployAgroTokenFixture);
+      const mintAmount = ethers.parseUnits("1000", 18);
+
+      await expect(token.connect(user).mint(user.address, mintAmount)).to.be.revertedWithCustomError(
+        token,
+        "AccessControlUnauthorizedAccount"
+      );
+    });
+
+    it("allows accounts with PAUSER_ROLE to pause", async function () {
+      const { token, admin } = await loadFixture(deployAgroTokenFixture);
+
+      await token.connect(admin).pause();
+
+      expect(await token.paused()).to.equal(true);
+    });
+
+    it("reverts pause for accounts without PAUSER_ROLE", async function () {
+      const { token, user } = await loadFixture(deployAgroTokenFixture);
+
+      await expect(token.connect(user).pause()).to.be.revertedWithCustomError(
+        token,
+        "AccessControlUnauthorizedAccount"
+      );
+    });
+
+    it("allows accounts with PAUSER_ROLE to unpause", async function () {
+      const { token, admin } = await loadFixture(deployAgroTokenFixture);
+
+      await token.connect(admin).pause();
+      await token.connect(admin).unpause();
+
+      expect(await token.paused()).to.equal(false);
+    });
+
+    it("reverts unpause for accounts without PAUSER_ROLE", async function () {
+      const { token, admin, user } = await loadFixture(deployAgroTokenFixture);
+
+      await token.connect(admin).pause();
+
+      await expect(token.connect(user).unpause()).to.be.revertedWithCustomError(
+        token,
+        "AccessControlUnauthorizedAccount"
       );
     });
   });
