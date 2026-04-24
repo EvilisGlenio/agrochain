@@ -1,4 +1,4 @@
-import { loadFixture } from "@nomicfoundation/hardhat-toolbox/network-helpers";
+import { loadFixture, mine } from "@nomicfoundation/hardhat-toolbox/network-helpers";
 import { expect } from "chai";
 import hre from "hardhat";
 import { AgroToken__factory } from "../typechain-types";
@@ -156,6 +156,78 @@ describe("AgroToken", function () {
       await token.connect(admin).transfer(user.address, transferAmount);
 
       expect(await token.balanceOf(user.address)).to.equal(transferAmount);
+    });
+  });
+
+  describe("governance", function () {
+    it("keeps votes at zero until the holder delegates", async function () {
+      const { token, admin, user } = await loadFixture(deployAgroTokenFixture);
+      const transferAmount = ethers.parseUnits("100", 18);
+
+      await token.connect(admin).transfer(user.address, transferAmount);
+
+      expect(await token.balanceOf(user.address)).to.equal(transferAmount);
+      expect(await token.getVotes(user.address)).to.equal(0n);
+    });
+
+    it("activates voting power after self-delegation", async function () {
+      const { token, admin, user } = await loadFixture(deployAgroTokenFixture);
+      const transferAmount = ethers.parseUnits("100", 18);
+
+      await token.connect(admin).transfer(user.address, transferAmount);
+      await token.connect(user).delegate(user.address);
+
+      expect(await token.getVotes(user.address)).to.equal(transferAmount);
+    });
+
+    it("moves voting power to another delegate", async function () {
+      const { token, admin, user } = await loadFixture(deployAgroTokenFixture);
+      const delegatee = admin;
+      const transferAmount = ethers.parseUnits("100", 18);
+
+      await token.connect(admin).transfer(user.address, transferAmount);
+      await token.connect(user).delegate(delegatee.address);
+
+      expect(await token.getVotes(user.address)).to.equal(0n);
+      expect(await token.getVotes(delegatee.address)).to.equal(transferAmount);
+    });
+
+    it("returns historical voting power with getPastVotes", async function () {
+      const { token, admin, user } = await loadFixture(deployAgroTokenFixture);
+      const transferAmount = ethers.parseUnits("100", 18);
+
+      await token.connect(admin).transfer(user.address, transferAmount);
+      await token.connect(user).delegate(user.address);
+      await mine();
+
+      const snapshotBlock = await ethers.provider.getBlockNumber();
+
+      await mine();
+
+      expect(await token.getPastVotes(user.address, snapshotBlock)).to.equal(transferAmount);
+    });
+
+    it("updates current votes after transfers for delegated holders", async function () {
+      const { token, admin, user } = await loadFixture(deployAgroTokenFixture);
+      const initialAmount = ethers.parseUnits("100", 18);
+      const sentAmount = ethers.parseUnits("40", 18);
+
+      await token.connect(admin).transfer(user.address, initialAmount);
+      await token.connect(user).delegate(user.address);
+      await token.connect(user).transfer(admin.address, sentAmount);
+
+      expect(await token.getVotes(user.address)).to.equal(initialAmount - sentAmount);
+    });
+
+    it("updates votes after minting to a delegated account", async function () {
+      const { token, admin, user } = await loadFixture(deployAgroTokenFixture);
+      const mintAmount = ethers.parseUnits("100", 18);
+
+      await token.connect(user).delegate(user.address);
+      await token.connect(admin).mint(user.address, mintAmount);
+
+      expect(await token.balanceOf(user.address)).to.equal(mintAmount);
+      expect(await token.getVotes(user.address)).to.equal(mintAmount);
     });
   });
 });
