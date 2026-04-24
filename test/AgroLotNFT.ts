@@ -161,4 +161,49 @@ describe("AgroLotNFT", function () {
       expect(await nft.nextTokenId()).to.equal(2n);
     });
   });
+
+  describe("pausing", function () {
+    it("blocks mintLot while paused", async function () {
+      const { nft, admin } = await loadFixture(deployAgroLotNFTFixture);
+
+      await nft.connect(admin).pause();
+
+      await expect(
+        nft.connect(admin).mintLot("https://example.com/lots/0.json", "queijo")
+      ).to.be.revertedWithCustomError(nft, "EnforcedPause");
+    });
+
+    it("blocks transferFrom while paused", async function () {
+      const { nft, admin, user } = await loadFixture(deployAgroLotNFTFixture);
+
+      await nft.connect(admin).mintLot("https://example.com/lots/0.json", "queijo");
+      await nft.connect(admin).pause();
+
+      await expect(
+        nft.connect(admin).transferFrom(admin.address, user.address, 0n)
+      ).to.be.revertedWithCustomError(nft, "EnforcedPause");
+    });
+
+    it("blocks safeTransferFrom while paused", async function () {
+      const { nft, admin, user } = await loadFixture(deployAgroLotNFTFixture);
+
+      await nft.connect(admin).mintLot("https://example.com/lots/0.json", "queijo");
+      await nft.connect(admin).pause();
+
+      await expect(
+        nft["safeTransferFrom(address,address,uint256)"](admin.address, user.address, 0n)
+      ).to.be.revertedWithCustomError(nft, "EnforcedPause");
+    });
+
+    it("allows transfers again after unpause", async function () {
+      const { nft, admin, user } = await loadFixture(deployAgroLotNFTFixture);
+
+      await nft.connect(admin).mintLot("https://example.com/lots/0.json", "queijo");
+      await nft.connect(admin).pause();
+      await nft.connect(admin).unpause();
+      await nft.connect(admin).transferFrom(admin.address, user.address, 0n);
+
+      expect(await nft.ownerOf(0n)).to.equal(user.address);
+    });
+  });
 });
