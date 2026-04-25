@@ -139,4 +139,111 @@ contract AgroDAO is AccessControl, Pausable, ReentrancyGuard {
     function unpause() external onlyRole(PAUSER_ROLE) {
         _unpause();
     }
+
+    function propose(
+        address target,
+        uint256 value,
+        bytes calldata data,
+        string calldata description
+    ) external whenNotPaused returns (uint256 id) {
+        require(allowedTargets[target], "target not allowed");
+        require(data.length > 0, "empty proposal data");
+
+        uint256 snapshotReferenceBlock = block.number - 1;
+        require(
+            votesToken.getPastVotes(msg.sender, snapshotReferenceBlock) >= proposalThreshold,
+            "proposal threshold"
+        );
+
+        id = ++proposalCount;
+
+        uint64 snapshotBlock = uint64(block.number + votingDelay);
+        uint64 deadlineBlock = snapshotBlock + votingPeriod;
+        bytes32 descriptionHash = keccak256(bytes(description));
+
+        proposals[id] = Proposal({
+            proposer: msg.sender,
+            target: target,
+            value: value,
+            data: data,
+            descriptionHash: descriptionHash,
+            snapshotBlock: snapshotBlock,
+            deadlineBlock: deadlineBlock,
+            forVotes: 0,
+            againstVotes: 0,
+            executed: false
+        });
+
+        emit Proposed(id, msg.sender, target, value, descriptionHash, snapshotBlock, deadlineBlock);
+    }
+
+    function vote(uint256 id, bool support) external whenNotPaused {
+        Proposal storage proposal = proposals[id];
+
+        require(_exists(proposal), "unknown proposal");
+        require(block.number >= proposal.snapshotBlock, "voting not started");
+        require(block.number <= proposal.deadlineBlock, "voting ended");
+        require(!hasVoted[id][msg.sender], "already voted");
+
+        uint256 weight = votesToken.getPastVotes(msg.sender, proposal.snapshotBlock);
+        require(weight > 0, "no voting power");
+
+        hasVoted[id][msg.sender] = true;
+
+        if (support) {
+            proposal.forVotes += weight;
+        } else {
+            proposal.againstVotes += weight;
+        }
+
+        emit Voted(id, msg.sender, support, weight);
+    }
+
+    function execute(uint256 id) external payable nonReentrant whenNotPaused {
+        Proposal storage proposal = proposals[id];
+
+        require(_exists(proposal), "unknown proposal");
+        require(block.number > proposal.deadlineBlock, "voting still active");
+        require(!proposal.executed, "proposal already executed");
+        require(proposal.forVotes >= quorumVotes, "quorum not reached");
+        require(proposal.forVotes > proposal.againstVotes, "proposal defeated");
+        require(allowedTargets[proposal.target], "target not allowed");
+
+        proposal.executed = true;
+
+        (bool ok,) = proposal.target.call{ value: proposal.value }(proposal.data);
+        require(ok, "execution failed");
+
+        emit Executed(id, proposal.target, proposal.value);
+    }
+
+    function state(uint256 id) external view returns (ProposalState) {
+        Proposal storage proposal = proposals[id];
+
+        if (!_exists(proposal)) {
+            return ProposalState.Unknown;
+        }
+
+        if (proposal.executed) {
+            return ProposalState.Executed;
+        }
+
+        if (block.number < proposal.snapshotBlock) {
+            return ProposalState.Pending;
+        }
+
+        if (block.number <= proposal.deadlineBlock) {
+            return ProposalState.Active;
+        }
+
+        if (proposal.forVotes >= quorumVotes && proposal.forVotes > proposal.againstVotes) {
+            return ProposalState.Succeeded;
+        }
+
+        return ProposalState.Defeated;
+    }
+
+    function _exists(Proposal storage proposal) internal view returns (bool) {
+        return proposal.proposer != address(0);
+    }
 }
