@@ -394,4 +394,101 @@ describe("AgroDAO", function () {
       expect(proposal.deadlineBlock).to.equal(proposal.snapshotBlock + BigInt(votingPeriod));
     });
   });
+
+  describe("voting", function () {
+    async function deployVotableAgroDAOFixture() {
+      const fixture = await deployProposableAgroDAOFixture();
+      const { dao, staking, user } = fixture;
+      const data = staking.interface.encodeFunctionData("setApr", [150_000n]);
+
+      await dao.connect(user).propose(await staking.getAddress(), 0, data, "Update APR");
+
+      return { ...fixture, proposalId: 1n, data };
+    }
+
+    it("allows a favorable vote during the active window", async function () {
+      const { dao, user, proposalId, proposalThreshold } = await loadFixture(deployVotableAgroDAOFixture);
+
+      await mine(2);
+
+      await expect(dao.connect(user).vote(proposalId, true))
+        .to.emit(dao, "Voted")
+        .withArgs(proposalId, user.address, true, proposalThreshold);
+
+      const proposal = await dao.proposals(proposalId);
+
+      expect(proposal.forVotes).to.equal(proposalThreshold);
+      expect(proposal.againstVotes).to.equal(0n);
+      expect(await dao.hasVoted(proposalId, user.address)).to.equal(true);
+    });
+
+    it("allows an opposing vote during the active window", async function () {
+      const { dao, user, proposalId, proposalThreshold } = await loadFixture(deployVotableAgroDAOFixture);
+
+      await mine(2);
+      await dao.connect(user).vote(proposalId, false);
+
+      const proposal = await dao.proposals(proposalId);
+
+      expect(proposal.forVotes).to.equal(0n);
+      expect(proposal.againstVotes).to.equal(proposalThreshold);
+    });
+
+    it("reverts voting before the snapshot block", async function () {
+      const { dao, user, proposalId } = await loadFixture(deployVotableAgroDAOFixture);
+
+      await expect(dao.connect(user).vote(proposalId, true)).to.be.revertedWith("voting not started");
+    });
+
+    it("reverts voting after the deadline block", async function () {
+      const { dao, user, proposalId, votingDelay, votingPeriod } = await loadFixture(deployVotableAgroDAOFixture);
+
+      await mine(votingDelay + votingPeriod + 2);
+
+      await expect(dao.connect(user).vote(proposalId, true)).to.be.revertedWith("voting ended");
+    });
+
+    it("reverts voting on an unknown proposal", async function () {
+      const { dao, user } = await loadFixture(deployProposableAgroDAOFixture);
+
+      await expect(dao.connect(user).vote(999n, true)).to.be.revertedWith("unknown proposal");
+    });
+
+    it("reverts double voting", async function () {
+      const { dao, user, proposalId } = await loadFixture(deployVotableAgroDAOFixture);
+
+      await mine(2);
+      await dao.connect(user).vote(proposalId, true);
+
+      await expect(dao.connect(user).vote(proposalId, true)).to.be.revertedWith("already voted");
+    });
+
+    it("reverts voting when the voter had no power at the snapshot", async function () {
+      const { dao, token, admin, proposalId } = await loadFixture(deployVotableAgroDAOFixture);
+      const lateVoter = admin;
+      const lateVotes = ethers.parseUnits("200", 18);
+
+      await mine(2);
+      await token.connect(admin).transfer(lateVoter.address, lateVotes);
+      await token.connect(lateVoter).delegate(lateVoter.address);
+      await mine();
+
+      await expect(dao.connect(lateVoter).vote(proposalId, true)).to.be.revertedWith("no voting power");
+    });
+
+    it("uses historical snapshot voting power instead of current balance", async function () {
+      const { dao, token, user, admin, proposalId, proposalThreshold } = await loadFixture(deployVotableAgroDAOFixture);
+
+      await mine(2);
+      await token.connect(user).transfer(admin.address, proposalThreshold);
+
+      expect(await token.balanceOf(user.address)).to.equal(0n);
+
+      await dao.connect(user).vote(proposalId, true);
+
+      const proposal = await dao.proposals(proposalId);
+
+      expect(proposal.forVotes).to.equal(proposalThreshold);
+    });
+  });
 });

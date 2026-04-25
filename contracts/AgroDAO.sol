@@ -181,7 +181,7 @@ contract AgroDAO is AccessControl, Pausable, ReentrancyGuard {
         Proposal storage proposal = proposals[id];
 
         require(_exists(proposal), "unknown proposal");
-        require(block.number >= proposal.snapshotBlock, "voting not started");
+        require(block.number > proposal.snapshotBlock, "voting not started");
         require(block.number <= proposal.deadlineBlock, "voting ended");
         require(!hasVoted[id][msg.sender], "already voted");
 
@@ -229,7 +229,7 @@ contract AgroDAO is AccessControl, Pausable, ReentrancyGuard {
             return ProposalState.Executed;
         }
 
-        if (block.number < proposal.snapshotBlock) {
+        if (block.number <= proposal.snapshotBlock) {
             return ProposalState.Pending;
         }
 
