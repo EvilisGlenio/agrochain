@@ -132,6 +132,50 @@ contract AgroStaking is AccessControl, Pausable, ReentrancyGuard {
         emit Unstaked(msg.sender, amount);
     }
 
+    function setApr(uint256 newAprBps) external onlyRole(PARAMETER_ROLE) {
+        require(newAprBps > 0, "invalid apr");
+
+        uint256 oldAprBps = baseAprBps;
+        baseAprBps = newAprBps;
+
+        emit AprUpdated(oldAprBps, newAprBps);
+    }
+
+    function setOracleParams(
+        uint256 newStaleThreshold,
+        int256 newFloorPrice,
+        int256 newCeilingPrice
+    ) external onlyRole(PARAMETER_ROLE) {
+        require(newStaleThreshold > 0, "invalid stale threshold");
+        require(newFloorPrice > 0, "invalid floor price");
+        require(newCeilingPrice >= newFloorPrice, "invalid ceiling price");
+
+        uint256 oldStaleThreshold = staleThreshold;
+        int256 oldFloorPrice = floorPrice;
+        int256 oldCeilingPrice = ceilingPrice;
+
+        staleThreshold = newStaleThreshold;
+        floorPrice = newFloorPrice;
+        ceilingPrice = newCeilingPrice;
+
+        emit OracleParamsUpdated(
+            oldStaleThreshold,
+            newStaleThreshold,
+            oldFloorPrice,
+            newFloorPrice,
+            oldCeilingPrice,
+            newCeilingPrice
+        );
+    }
+
+    function pause() external onlyRole(PAUSER_ROLE) {
+        _pause();
+    }
+
+    function unpause() external onlyRole(PAUSER_ROLE) {
+        _unpause();
+    }
+
     function earned(address user) external view returns (uint256) {
         StakeInfo storage userStake = stakeInfo[user];
 
