@@ -610,4 +610,70 @@ describe("AgroStaking", function () {
       expect(earnedValue).to.be.greaterThanOrEqual(expectedReward);
     });
   });
+
+  describe("pausing", function () {
+    it("blocks stake while paused", async function () {
+      const { staking, token, admin, user, minStake } = await loadFixture(deployAgroStakingFixture);
+
+      await token.mint(user.address, minStake);
+      await token.connect(user).approve(await staking.getAddress(), minStake);
+      await staking.connect(admin).pause();
+
+      await expect(staking.connect(user).stake(minStake)).to.be.revertedWithCustomError(
+        staking,
+        "EnforcedPause"
+      );
+    });
+
+    it("blocks claim while paused", async function () {
+      const { staking, token, admin, user, minStake } = await loadFixture(deployAgroStakingFixture);
+      const rewardFunding = ethers.parseUnits("10000", 18);
+
+      await token.mint(user.address, minStake);
+      await token.mint(admin.address, rewardFunding);
+      await token.connect(user).approve(await staking.getAddress(), minStake);
+      await token.connect(admin).transfer(await staking.getAddress(), rewardFunding);
+      await staking.connect(user).stake(minStake);
+      await time.increase(60 * 60);
+      await staking.connect(admin).pause();
+
+      await expect(staking.connect(user).claim()).to.be.revertedWithCustomError(staking, "EnforcedPause");
+    });
+
+    it("blocks unstake while paused", async function () {
+      const { staking, token, admin, user, minStake } = await loadFixture(deployAgroStakingFixture);
+
+      await token.mint(user.address, minStake);
+      await token.connect(user).approve(await staking.getAddress(), minStake);
+      await staking.connect(user).stake(minStake);
+      await staking.connect(admin).pause();
+
+      await expect(staking.connect(user).unstake(minStake)).to.be.revertedWithCustomError(
+        staking,
+        "EnforcedPause"
+      );
+    });
+
+    it("allows stake, claim, and unstake again after unpause", async function () {
+      const { staking, token, admin, user, minStake } = await loadFixture(deployAgroStakingFixture);
+      const rewardFunding = ethers.parseUnits("10000", 18);
+
+      await token.mint(user.address, minStake * 2n);
+      await token.mint(admin.address, rewardFunding);
+      await token.connect(user).approve(await staking.getAddress(), minStake * 2n);
+      await token.connect(admin).transfer(await staking.getAddress(), rewardFunding);
+
+      await staking.connect(admin).pause();
+      await staking.connect(admin).unpause();
+
+      await staking.connect(user).stake(minStake);
+      await time.increase(60 * 60);
+      await staking.connect(user).claim();
+      await staking.connect(user).unstake(minStake);
+
+      const userStake = await staking.stakeInfo(user.address);
+
+      expect(userStake.amount).to.equal(0n);
+    });
+  });
 });
