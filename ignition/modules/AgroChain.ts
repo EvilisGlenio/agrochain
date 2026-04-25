@@ -19,21 +19,35 @@ const VOTING_PERIOD = 40n;
 export default buildModule("AgroChain", (m) => {
   const admin = m.getAccount(0);
 
+  const token = m.contract("AgroToken", [admin, INITIAL_SUPPLY]);
+
+  const nft = m.contract("AgroLotNFT", [admin]);
+
+  const staking = m.contract("AgroStaking", [
+    admin,
+    token,
+    CHAINLINK_ETH_USD_SEPOLIA,
+    BASE_APR_BPS,
+    MIN_STAKE,
+    STALE_THRESHOLD,
+    FLOOR_PRICE,
+    CEILING_PRICE,
+  ]);
+
+  const dao = m.contract("AgroDAO", [
+    admin,
+    token,
+    PROPOSAL_THRESHOLD,
+    QUORUM_VOTES,
+    VOTING_DELAY,
+    VOTING_PERIOD,
+  ]);
+
   return {
     admin,
-    config: {
-      initialSupply: INITIAL_SUPPLY,
-      stakingRewards: STAKING_REWARDS,
-      chainlinkEthUsdSepolia: CHAINLINK_ETH_USD_SEPOLIA,
-      baseAprBps: BASE_APR_BPS,
-      minStake: MIN_STAKE,
-      staleThreshold: STALE_THRESHOLD,
-      floorPrice: FLOOR_PRICE,
-      ceilingPrice: CEILING_PRICE,
-      proposalThreshold: PROPOSAL_THRESHOLD,
-      quorumVotes: QUORUM_VOTES,
-      votingDelay: VOTING_DELAY,
-      votingPeriod: VOTING_PERIOD,
-    },
+    token,
+    nft,
+    staking,
+    dao,
   };
 });
