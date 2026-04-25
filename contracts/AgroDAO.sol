@@ -203,6 +203,7 @@ contract AgroDAO is AccessControl, Pausable, ReentrancyGuard {
         Proposal storage proposal = proposals[id];
 
         require(_exists(proposal), "unknown proposal");
+        require(msg.value == proposal.value, "invalid value");
         require(block.number > proposal.deadlineBlock, "voting still active");
         require(!proposal.executed, "proposal already executed");
         require(proposal.forVotes >= quorumVotes, "quorum not reached");
