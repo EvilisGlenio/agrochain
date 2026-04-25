@@ -484,4 +484,130 @@ describe("AgroStaking", function () {
       expect(await token.balanceOf(user.address)).to.equal(minStake);
     });
   });
+
+  describe("oracle and apr", function () {
+    it("returns 90% of the base APR below the floor", async function () {
+      const { staking, priceFeed, baseAprBps, floorPrice } = await loadFixture(deployAgroStakingFixture);
+
+      await priceFeed.setRoundData(2, floorPrice - 1n, await time.latest(), await time.latest(), 2);
+
+      expect(await staking.currentAprBps()).to.equal((baseAprBps * 90n) / 100n);
+    });
+
+    it("returns the base APR inside the neutral band", async function () {
+      const { staking, priceFeed, baseAprBps } = await loadFixture(deployAgroStakingFixture);
+      const now = await time.latest();
+
+      await priceFeed.setRoundData(2, 2500n * 10n ** 8n, now, now, 2);
+
+      expect(await staking.currentAprBps()).to.equal(baseAprBps);
+    });
+
+    it("returns 110% of the base APR above the ceiling", async function () {
+      const { staking, priceFeed, baseAprBps, ceilingPrice } = await loadFixture(deployAgroStakingFixture);
+      const now = await time.latest();
+
+      await priceFeed.setRoundData(2, ceilingPrice + 1n, now, now, 2);
+
+      expect(await staking.currentAprBps()).to.equal((baseAprBps * 110n) / 100n);
+    });
+
+    it("earned grows over time for an active position", async function () {
+      const { staking, token, user, minStake } = await loadFixture(deployAgroStakingFixture);
+
+      await token.mint(user.address, minStake);
+      await token.connect(user).approve(await staking.getAddress(), minStake);
+      await staking.connect(user).stake(minStake);
+
+      const earnedAtStart = await staking.earned(user.address);
+      await time.increase(60 * 60);
+      const earnedAfterOneHour = await staking.earned(user.address);
+
+      expect(earnedAtStart).to.equal(0n);
+      expect(earnedAfterOneHour).to.be.greaterThan(0n);
+    });
+
+    it("earned returns only unclaimed when the user has no active stake", async function () {
+      const { staking, token, admin, user, minStake } = await loadFixture(deployAgroStakingFixture);
+      const rewardFunding = ethers.parseUnits("10000", 18);
+
+      await token.mint(user.address, minStake);
+      await token.mint(admin.address, rewardFunding);
+      await token.connect(user).approve(await staking.getAddress(), minStake);
+      await token.connect(admin).transfer(await staking.getAddress(), rewardFunding);
+
+      await staking.connect(user).stake(minStake);
+      await time.increase(60 * 60);
+      await staking.connect(user).unstake(minStake);
+
+      const userStake = await staking.stakeInfo(user.address);
+      const earnedValue = await staking.earned(user.address);
+
+      expect(userStake.amount).to.equal(0n);
+      expect(userStake.unclaimed).to.be.greaterThan(0n);
+      expect(earnedValue).to.equal(userStake.unclaimed);
+    });
+
+    it("reverts when the oracle answer is non-positive", async function () {
+      const { staking, priceFeed } = await loadFixture(deployAgroStakingFixture);
+      const now = await time.latest();
+
+      await priceFeed.setRoundData(2, 0, now, now, 2);
+
+      await expect(staking.currentAprBps()).to.be.revertedWith("bad oracle");
+    });
+
+    it("reverts when the oracle round is incomplete", async function () {
+      const { staking, priceFeed } = await loadFixture(deployAgroStakingFixture);
+      const now = await time.latest();
+
+      await priceFeed.setRoundData(2, 2500n * 10n ** 8n, now, 0, 2);
+
+      await expect(staking.currentAprBps()).to.be.revertedWith("incomplete oracle round");
+    });
+
+    it("reverts when the oracle timestamp is in the future", async function () {
+      const { staking, priceFeed } = await loadFixture(deployAgroStakingFixture);
+      const now = await time.latest();
+
+      await priceFeed.setRoundData(2, 2500n * 10n ** 8n, now, now + 1000, 2);
+
+      await expect(staking.currentAprBps()).to.be.revertedWith("future oracle timestamp");
+    });
+
+    it("reverts when answeredInRound is behind roundId", async function () {
+      const { staking, priceFeed } = await loadFixture(deployAgroStakingFixture);
+      const now = await time.latest();
+
+      await priceFeed.setRoundData(2, 2500n * 10n ** 8n, now, now, 1);
+
+      await expect(staking.currentAprBps()).to.be.revertedWith("stale oracle round");
+    });
+
+    it("reverts when the oracle data is stale by time", async function () {
+      const { staking, priceFeed, staleThreshold } = await loadFixture(deployAgroStakingFixture);
+      const now = await time.latest();
+
+      await priceFeed.setRoundData(2, 2500n * 10n ** 8n, now, now, 2);
+      await time.increase(Number(staleThreshold) + 1);
+
+      await expect(staking.currentAprBps()).to.be.revertedWith("stale oracle");
+    });
+
+    it("computes rewards using the expected formula", async function () {
+      const { staking, token, user, minStake, baseAprBps } = await loadFixture(deployAgroStakingFixture);
+      const duration = 60 * 60;
+
+      await token.mint(user.address, minStake);
+      await token.connect(user).approve(await staking.getAddress(), minStake);
+      await staking.connect(user).stake(minStake);
+
+      await time.increase(duration);
+
+      const expectedReward = (minStake * baseAprBps * BigInt(duration)) / (365n * 24n * 60n * 60n * 10_000n);
+      const earnedValue = await staking.earned(user.address);
+
+      expect(earnedValue).to.be.greaterThanOrEqual(expectedReward);
+    });
+  });
 });
