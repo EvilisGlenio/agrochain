@@ -1,4 +1,4 @@
-import { loadFixture } from "@nomicfoundation/hardhat-toolbox/network-helpers";
+import { loadFixture, time } from "@nomicfoundation/hardhat-toolbox/network-helpers";
 import { expect } from "chai";
 import hre from "hardhat";
 import { AgroStaking__factory, MockERC20__factory, MockV3Aggregator__factory } from "../typechain-types";
@@ -308,6 +308,77 @@ describe("AgroStaking", function () {
         staking,
         "AccessControlUnauthorizedAccount"
       );
+    });
+  });
+
+  describe("staking", function () {
+    it("stakes successfully and updates the user position", async function () {
+      const { staking, token, user, minStake } = await loadFixture(deployAgroStakingFixture);
+
+      await token.mint(user.address, minStake);
+      await token.connect(user).approve(await staking.getAddress(), minStake);
+
+      await expect(staking.connect(user).stake(minStake)).to.emit(staking, "Staked").withArgs(user.address, minStake);
+
+      const userStake = await staking.stakeInfo(user.address);
+
+      expect(await token.balanceOf(await staking.getAddress())).to.equal(minStake);
+      expect(userStake.amount).to.equal(minStake);
+      expect(userStake.lastAccrual).to.be.greaterThan(0n);
+    });
+
+    it("reverts stake below the minimum", async function () {
+      const { staking, token, user, minStake } = await loadFixture(deployAgroStakingFixture);
+      const amount = minStake - 1n;
+
+      await token.mint(user.address, minStake);
+      await token.connect(user).approve(await staking.getAddress(), minStake);
+
+      await expect(staking.connect(user).stake(amount)).to.be.revertedWith("min stake");
+    });
+
+    it("reverts stake without sufficient allowance", async function () {
+      const { staking, token, user, minStake } = await loadFixture(deployAgroStakingFixture);
+
+      await token.mint(user.address, minStake);
+
+      await expect(staking.connect(user).stake(minStake)).to.be.reverted;
+    });
+
+    it("accumulates the staked amount across multiple stakes", async function () {
+      const { staking, token, user, minStake } = await loadFixture(deployAgroStakingFixture);
+
+      await token.mint(user.address, minStake * 2n);
+      await token.connect(user).approve(await staking.getAddress(), minStake * 2n);
+
+      await staking.connect(user).stake(minStake);
+      await staking.connect(user).stake(minStake);
+
+      const userStake = await staking.stakeInfo(user.address);
+
+      expect(userStake.amount).to.equal(minStake * 2n);
+      expect(await token.balanceOf(await staking.getAddress())).to.equal(minStake * 2n);
+    });
+
+    it("preserves accrued rewards before adding more stake", async function () {
+      const { staking, token, user, minStake } = await loadFixture(deployAgroStakingFixture);
+
+      await token.mint(user.address, minStake * 3n);
+      await token.connect(user).approve(await staking.getAddress(), minStake * 3n);
+
+      await staking.connect(user).stake(minStake);
+      await time.increase(60 * 60);
+
+      const earnedBefore = await staking.earned(user.address);
+
+      await staking.connect(user).stake(minStake);
+
+      const userStake = await staking.stakeInfo(user.address);
+
+      expect(userStake.amount).to.equal(minStake * 2n);
+      expect(earnedBefore).to.be.greaterThan(0n);
+      expect(userStake.unclaimed).to.be.greaterThanOrEqual(earnedBefore);
+      expect(userStake.lastAccrual).to.be.greaterThan(0n);
     });
   });
 });
