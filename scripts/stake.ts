@@ -1,5 +1,5 @@
 import { ethers } from "ethers";
-import { addresses, getContract, runMain, wallet } from "./common";
+import { addresses, getContract, provider, runMain, wallet } from "./common";
 
 async function main() {
   const token = getContract("AgroToken", addresses.token);
@@ -7,11 +7,12 @@ async function main() {
 
   const amountInput = process.env.STAKE_AMOUNT ?? "100";
   const amount = ethers.parseUnits(amountInput, 18);
+  const nonce = await provider.getTransactionCount(wallet.address, "latest");
 
-  const approveTx = await token.approve(addresses.staking, amount);
+  const approveTx = await token.approve(addresses.staking, amount, { nonce });
   const approveReceipt = await approveTx.wait();
 
-  const stakeTx = await staking.stake(amount);
+  const stakeTx = await staking.stake(amount, { nonce: nonce + 1 });
   const stakeReceipt = await stakeTx.wait();
 
   console.log(`Staker: ${wallet.address}`);

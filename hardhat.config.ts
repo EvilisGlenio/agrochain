@@ -8,7 +8,11 @@ const sepoliaRpcUrl = process.env.SEPOLIA_RPC_URL;
 const sepoliaPrivateKey = process.env.SEPOLIA_PRIVATE_KEY;
 const etherscanApiKey = process.env.ETHERSCAN_API_KEY;
 
-const networks: HardhatUserConfig["networks"] = {};
+const networks: HardhatUserConfig["networks"] = {
+  localhost: {
+    url: "http://127.0.0.1:8545",
+  } satisfies HttpNetworkUserConfig,
+};
 
 if (sepoliaRpcUrl && sepoliaPrivateKey) {
   networks.sepolia = {

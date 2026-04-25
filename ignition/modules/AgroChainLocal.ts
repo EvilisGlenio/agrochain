@@ -3,8 +3,6 @@ import { buildModule } from "@nomicfoundation/hardhat-ignition/modules";
 const INITIAL_SUPPLY = 100_000n * 10n ** 18n;
 const STAKING_REWARDS = 20_000n * 10n ** 18n;
 
-const CHAINLINK_ETH_USD_SEPOLIA = "0x694AA1769357215DE4FAC081bf1f309aDC325306";
-
 const BASE_APR_BPS = 300_000n;
 const MIN_STAKE = 10n * 10n ** 18n;
 const STALE_THRESHOLD = 24n * 60n * 60n;
@@ -16,9 +14,13 @@ const QUORUM_VOTES = 1_000n * 10n ** 18n;
 const VOTING_DELAY = 1n;
 const VOTING_PERIOD = 40n;
 
-export default buildModule("AgroChain", (m) => {
+const MOCK_FEED_DECIMALS = 8;
+const MOCK_FEED_ANSWER = 2_500n * 10n ** 8n;
+
+export default buildModule("AgroChainLocal", (m) => {
   const admin = m.getAccount(0);
-  const priceFeed = m.getParameter("priceFeed", CHAINLINK_ETH_USD_SEPOLIA);
+
+  const mockPriceFeed = m.contract("MockV3Aggregator", [MOCK_FEED_DECIMALS, MOCK_FEED_ANSWER]);
 
   const token = m.contract("AgroToken", [admin, INITIAL_SUPPLY]);
 
@@ -27,7 +29,7 @@ export default buildModule("AgroChain", (m) => {
   const staking = m.contract("AgroStaking", [
     admin,
     token,
-    priceFeed,
+    mockPriceFeed,
     BASE_APR_BPS,
     MIN_STAKE,
     STALE_THRESHOLD,
@@ -51,6 +53,7 @@ export default buildModule("AgroChain", (m) => {
   m.call(token, "transfer", [staking, STAKING_REWARDS]);
 
   return {
+    mockPriceFeed,
     token,
     nft,
     staking,
