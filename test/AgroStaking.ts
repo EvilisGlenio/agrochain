@@ -189,4 +189,125 @@ describe("AgroStaking", function () {
       ).to.be.revertedWith("invalid stale threshold");
     });
   });
+
+  describe("access control", function () {
+    it("allows PARAMETER_ROLE to update APR", async function () {
+      const { staking, admin, baseAprBps } = await loadFixture(deployAgroStakingFixture);
+      const newAprBps = 150_000n;
+
+      await expect(staking.connect(admin).setApr(newAprBps))
+        .to.emit(staking, "AprUpdated")
+        .withArgs(baseAprBps, newAprBps);
+
+      expect(await staking.baseAprBps()).to.equal(newAprBps);
+    });
+
+    it("reverts setApr for accounts without PARAMETER_ROLE", async function () {
+      const { staking, user } = await loadFixture(deployAgroStakingFixture);
+
+      await expect(staking.connect(user).setApr(150_000n)).to.be.revertedWithCustomError(
+        staking,
+        "AccessControlUnauthorizedAccount"
+      );
+    });
+
+    it("reverts setApr with zero APR", async function () {
+      const { staking, admin } = await loadFixture(deployAgroStakingFixture);
+
+      await expect(staking.connect(admin).setApr(0)).to.be.revertedWith("invalid apr");
+    });
+
+    it("allows PARAMETER_ROLE to update oracle parameters", async function () {
+      const { staking, admin, staleThreshold, floorPrice, ceilingPrice } =
+        await loadFixture(deployAgroStakingFixture);
+
+      const newStaleThreshold = staleThreshold / 2n;
+      const newFloorPrice = floorPrice - 100n * 10n ** 8n;
+      const newCeilingPrice = ceilingPrice + 100n * 10n ** 8n;
+
+      await expect(staking.connect(admin).setOracleParams(newStaleThreshold, newFloorPrice, newCeilingPrice))
+        .to.emit(staking, "OracleParamsUpdated")
+        .withArgs(
+          staleThreshold,
+          newStaleThreshold,
+          floorPrice,
+          newFloorPrice,
+          ceilingPrice,
+          newCeilingPrice
+        );
+
+      expect(await staking.staleThreshold()).to.equal(newStaleThreshold);
+      expect(await staking.floorPrice()).to.equal(newFloorPrice);
+      expect(await staking.ceilingPrice()).to.equal(newCeilingPrice);
+    });
+
+    it("reverts setOracleParams for accounts without PARAMETER_ROLE", async function () {
+      const { staking, user } = await loadFixture(deployAgroStakingFixture);
+
+      await expect(
+        staking.connect(user).setOracleParams(3600n, 2_000n * 10n ** 8n, 3_000n * 10n ** 8n)
+      ).to.be.revertedWithCustomError(staking, "AccessControlUnauthorizedAccount");
+    });
+
+    it("reverts setOracleParams with zero stale threshold", async function () {
+      const { staking, admin, floorPrice, ceilingPrice } = await loadFixture(deployAgroStakingFixture);
+
+      await expect(staking.connect(admin).setOracleParams(0, floorPrice, ceilingPrice)).to.be.revertedWith(
+        "invalid stale threshold"
+      );
+    });
+
+    it("reverts setOracleParams with non-positive floor price", async function () {
+      const { staking, admin, ceilingPrice } = await loadFixture(deployAgroStakingFixture);
+
+      await expect(staking.connect(admin).setOracleParams(3600n, 0, ceilingPrice)).to.be.revertedWith(
+        "invalid floor price"
+      );
+    });
+
+    it("reverts setOracleParams with ceiling below floor", async function () {
+      const { staking, admin, floorPrice } = await loadFixture(deployAgroStakingFixture);
+
+      await expect(staking.connect(admin).setOracleParams(3600n, floorPrice, floorPrice - 1n)).to.be.revertedWith(
+        "invalid ceiling price"
+      );
+    });
+
+    it("allows PAUSER_ROLE to pause", async function () {
+      const { staking, admin } = await loadFixture(deployAgroStakingFixture);
+
+      await staking.connect(admin).pause();
+
+      expect(await staking.paused()).to.equal(true);
+    });
+
+    it("reverts pause for accounts without PAUSER_ROLE", async function () {
+      const { staking, user } = await loadFixture(deployAgroStakingFixture);
+
+      await expect(staking.connect(user).pause()).to.be.revertedWithCustomError(
+        staking,
+        "AccessControlUnauthorizedAccount"
+      );
+    });
+
+    it("allows PAUSER_ROLE to unpause", async function () {
+      const { staking, admin } = await loadFixture(deployAgroStakingFixture);
+
+      await staking.connect(admin).pause();
+      await staking.connect(admin).unpause();
+
+      expect(await staking.paused()).to.equal(false);
+    });
+
+    it("reverts unpause for accounts without PAUSER_ROLE", async function () {
+      const { staking, admin, user } = await loadFixture(deployAgroStakingFixture);
+
+      await staking.connect(admin).pause();
+
+      await expect(staking.connect(user).unpause()).to.be.revertedWithCustomError(
+        staking,
+        "AccessControlUnauthorizedAccount"
+      );
+    });
+  });
 });
