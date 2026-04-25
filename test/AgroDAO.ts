@@ -679,4 +679,81 @@ describe("AgroDAO", function () {
       await expect(dao.connect(admin).execute(proposalId, { value: 0 })).to.be.revertedWith("execution failed");
     });
   });
+
+  describe("pausing", function () {
+    it("blocks propose while paused", async function () {
+      const { dao, staking, admin, user, token, proposalThreshold } = await loadFixture(deployAgroDAOFixture);
+      const data = staking.interface.encodeFunctionData("setApr", [150_000n]);
+
+      await dao.connect(admin).setAllowedTarget(await staking.getAddress(), true);
+      await token.connect(admin).transfer(user.address, proposalThreshold);
+      await token.connect(user).delegate(user.address);
+      await mine();
+      await dao.connect(admin).pause();
+
+      await expect(dao.connect(user).propose(await staking.getAddress(), 0, data, "Update APR")).to.be.revertedWithCustomError(
+        dao,
+        "EnforcedPause"
+      );
+    });
+
+    it("blocks vote while paused", async function () {
+      const { dao, admin, user, staking } = await loadFixture(deployProposableAgroDAOFixture);
+      const data = staking.interface.encodeFunctionData("setApr", [150_000n]);
+
+      await dao.connect(user).propose(await staking.getAddress(), 0, data, "Update APR");
+      await mine(2);
+      await dao.connect(admin).pause();
+
+      await expect(dao.connect(user).vote(1n, true)).to.be.revertedWithCustomError(dao, "EnforcedPause");
+    });
+
+    it("blocks execute while paused", async function () {
+      const { dao, admin, staking, token, user, quorumVotes, votingDelay, votingPeriod } =
+        await loadFixture(deployProposableAgroDAOFixture);
+
+      await token.connect(admin).delegate(admin.address);
+      await mine();
+      await staking.connect(admin).grantRole(await staking.PARAMETER_ROLE(), await dao.getAddress());
+
+      const data = staking.interface.encodeFunctionData("setApr", [150_000n]);
+      await dao.connect(user).propose(await staking.getAddress(), 0, data, "Update APR");
+
+      expect(await dao.quorumVotes()).to.equal(quorumVotes);
+
+      await mine(2);
+      await dao.connect(admin).vote(1n, true);
+      await mine(votingDelay + votingPeriod + 1);
+      await dao.connect(admin).pause();
+
+      await expect(dao.connect(admin).execute(1n, { value: 0 })).to.be.revertedWithCustomError(dao, "EnforcedPause");
+    });
+
+    it("allows propose, vote, and execute again after unpause", async function () {
+      const { dao, admin, user, staking, token, proposalThreshold, votingDelay, votingPeriod } =
+        await loadFixture(deployAgroDAOFixture);
+
+      const newAprBps = 150_000n;
+      const data = staking.interface.encodeFunctionData("setApr", [newAprBps]);
+
+      await dao.connect(admin).setAllowedTarget(await staking.getAddress(), true);
+      await staking.connect(admin).grantRole(await staking.PARAMETER_ROLE(), await dao.getAddress());
+
+      await token.connect(admin).transfer(user.address, proposalThreshold);
+      await token.connect(user).delegate(user.address);
+      await token.connect(admin).delegate(admin.address);
+      await mine();
+
+      await dao.connect(admin).pause();
+      await dao.connect(admin).unpause();
+
+      await dao.connect(user).propose(await staking.getAddress(), 0, data, "Update APR");
+      await mine(2);
+      await dao.connect(admin).vote(1n, true);
+      await mine(votingDelay + votingPeriod + 1);
+      await dao.connect(admin).execute(1n, { value: 0 });
+
+      expect(await staking.baseAprBps()).to.equal(newAprBps);
+    });
+  });
 });
