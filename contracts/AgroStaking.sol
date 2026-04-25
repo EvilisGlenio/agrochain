@@ -246,6 +246,9 @@ contract AgroStaking is AccessControl, Pausable, ReentrancyGuard {
         (roundId, answer, startedAt, updatedAt, answeredInRound) = priceFeed.latestRoundData();
 
         require(answer > 0, "bad oracle");
+        require(updatedAt > 0, "incomplete oracle round");
+        require(updatedAt <= block.timestamp, "future oracle timestamp");
+        require(answeredInRound >= roundId, "stale oracle round");
         require(block.timestamp - updatedAt <= staleThreshold, "stale oracle");
     }
 }
