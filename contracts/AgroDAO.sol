@@ -92,4 +92,51 @@ contract AgroDAO is AccessControl, Pausable, ReentrancyGuard {
         _grantRole(TARGET_ROLE, admin);
         _grantRole(PARAMETER_ROLE, admin);
     }
+
+    function setAllowedTarget(address target, bool allowed) external onlyRole(TARGET_ROLE) {
+        require(target != address(0), "invalid target");
+
+        allowedTargets[target] = allowed;
+
+        emit AllowedTargetUpdated(target, allowed);
+    }
+
+    function setVotingParams(
+        uint256 proposalThreshold_,
+        uint256 quorumVotes_,
+        uint64 votingDelay_,
+        uint64 votingPeriod_
+    ) external onlyRole(PARAMETER_ROLE) {
+        require(quorumVotes_ > 0, "invalid quorum");
+        require(votingPeriod_ > 0, "invalid voting period");
+
+        uint256 oldProposalThreshold = proposalThreshold;
+        uint256 oldQuorumVotes = quorumVotes;
+        uint64 oldVotingDelay = votingDelay;
+        uint64 oldVotingPeriod = votingPeriod;
+
+        proposalThreshold = proposalThreshold_;
+        quorumVotes = quorumVotes_;
+        votingDelay = votingDelay_;
+        votingPeriod = votingPeriod_;
+
+        emit VotingParamsUpdated(
+            oldProposalThreshold,
+            proposalThreshold_,
+            oldQuorumVotes,
+            quorumVotes_,
+            oldVotingDelay,
+            votingDelay_,
+            oldVotingPeriod,
+            votingPeriod_
+        );
+    }
+
+    function pause() external onlyRole(PAUSER_ROLE) {
+        _pause();
+    }
+
+    function unpause() external onlyRole(PAUSER_ROLE) {
+        _unpause();
+    }
 }
