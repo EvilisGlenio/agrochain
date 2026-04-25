@@ -43,8 +43,13 @@ export default buildModule("AgroChain", (m) => {
     VOTING_PERIOD,
   ]);
 
+  const stakingParameterRole = m.staticCall(staking, "PARAMETER_ROLE", []);
+
+  m.call(staking, "grantRole", [stakingParameterRole, dao]);
+  m.call(dao, "setAllowedTarget", [staking, true]);
+  m.call(token, "transfer", [staking, STAKING_REWARDS]);
+
   return {
-    admin,
     token,
     nft,
     staking,
