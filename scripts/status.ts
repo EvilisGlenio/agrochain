@@ -13,7 +13,6 @@ async function main() {
     ethBalance,
     agroBalance,
     votes,
-    currentAprBps,
     proposalCount,
     stakeInfo,
   ] = await Promise.all([
@@ -21,12 +20,19 @@ async function main() {
     provider.getBalance(walletAddress),
     token.balanceOf(walletAddress),
     token.getVotes(walletAddress),
-    staking.currentAprBps(),
     dao.proposalCount(),
     staking.stakeInfo(walletAddress),
   ]);
 
+  let currentAprBps: bigint | string = "unavailable";
   let earned = 0n;
+
+  try {
+    currentAprBps = await staking.currentAprBps();
+  } catch {
+    // Oracle-dependent reads may revert if the feed is stale.
+  }
+
   try {
     earned = await staking.earned(walletAddress);
   } catch {
