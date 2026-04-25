@@ -153,4 +153,126 @@ describe("AgroDAO", function () {
       ).to.be.revertedWith("invalid voting period");
     });
   });
+
+  describe("administration", function () {
+    it("allows TARGET_ROLE to update allowed targets", async function () {
+      const { dao, admin, staking } = await loadFixture(deployAgroDAOFixture);
+
+      await expect(dao.connect(admin).setAllowedTarget(await staking.getAddress(), true))
+        .to.emit(dao, "AllowedTargetUpdated")
+        .withArgs(await staking.getAddress(), true);
+
+      expect(await dao.allowedTargets(await staking.getAddress())).to.equal(true);
+    });
+
+    it("reverts setAllowedTarget for accounts without TARGET_ROLE", async function () {
+      const { dao, user, staking } = await loadFixture(deployAgroDAOFixture);
+
+      await expect(dao.connect(user).setAllowedTarget(await staking.getAddress(), true)).to.be.revertedWithCustomError(
+        dao,
+        "AccessControlUnauthorizedAccount"
+      );
+    });
+
+    it("reverts setAllowedTarget with the zero address", async function () {
+      const { dao, admin } = await loadFixture(deployAgroDAOFixture);
+
+      await expect(dao.connect(admin).setAllowedTarget(ethers.ZeroAddress, true)).to.be.revertedWith(
+        "invalid target"
+      );
+    });
+
+    it("allows PARAMETER_ROLE to update voting parameters", async function () {
+      const { dao, admin, proposalThreshold, quorumVotes, votingDelay, votingPeriod } =
+        await loadFixture(deployAgroDAOFixture);
+
+      const newProposalThreshold = proposalThreshold / 2n;
+      const newQuorumVotes = quorumVotes / 2n;
+      const newVotingDelay = votingDelay + 1;
+      const newVotingPeriod = votingPeriod + 10;
+
+      await expect(
+        dao.connect(admin).setVotingParams(
+          newProposalThreshold,
+          newQuorumVotes,
+          newVotingDelay,
+          newVotingPeriod
+        )
+      )
+        .to.emit(dao, "VotingParamsUpdated")
+        .withArgs(
+          proposalThreshold,
+          newProposalThreshold,
+          quorumVotes,
+          newQuorumVotes,
+          votingDelay,
+          newVotingDelay,
+          votingPeriod,
+          newVotingPeriod
+        );
+
+      expect(await dao.proposalThreshold()).to.equal(newProposalThreshold);
+      expect(await dao.quorumVotes()).to.equal(newQuorumVotes);
+      expect(await dao.votingDelay()).to.equal(newVotingDelay);
+      expect(await dao.votingPeriod()).to.equal(newVotingPeriod);
+    });
+
+    it("reverts setVotingParams for accounts without PARAMETER_ROLE", async function () {
+      const { dao, user } = await loadFixture(deployAgroDAOFixture);
+
+      await expect(dao.connect(user).setVotingParams(1, 1, 1, 1)).to.be.revertedWithCustomError(
+        dao,
+        "AccessControlUnauthorizedAccount"
+      );
+    });
+
+    it("reverts setVotingParams with zero quorum", async function () {
+      const { dao, admin } = await loadFixture(deployAgroDAOFixture);
+
+      await expect(dao.connect(admin).setVotingParams(1, 0, 1, 1)).to.be.revertedWith("invalid quorum");
+    });
+
+    it("reverts setVotingParams with zero voting period", async function () {
+      const { dao, admin } = await loadFixture(deployAgroDAOFixture);
+
+      await expect(dao.connect(admin).setVotingParams(1, 1, 1, 0)).to.be.revertedWith("invalid voting period");
+    });
+
+    it("allows PAUSER_ROLE to pause", async function () {
+      const { dao, admin } = await loadFixture(deployAgroDAOFixture);
+
+      await dao.connect(admin).pause();
+
+      expect(await dao.paused()).to.equal(true);
+    });
+
+    it("reverts pause for accounts without PAUSER_ROLE", async function () {
+      const { dao, user } = await loadFixture(deployAgroDAOFixture);
+
+      await expect(dao.connect(user).pause()).to.be.revertedWithCustomError(
+        dao,
+        "AccessControlUnauthorizedAccount"
+      );
+    });
+
+    it("allows PAUSER_ROLE to unpause", async function () {
+      const { dao, admin } = await loadFixture(deployAgroDAOFixture);
+
+      await dao.connect(admin).pause();
+      await dao.connect(admin).unpause();
+
+      expect(await dao.paused()).to.equal(false);
+    });
+
+    it("reverts unpause for accounts without PAUSER_ROLE", async function () {
+      const { dao, admin, user } = await loadFixture(deployAgroDAOFixture);
+
+      await dao.connect(admin).pause();
+
+      await expect(dao.connect(user).unpause()).to.be.revertedWithCustomError(
+        dao,
+        "AccessControlUnauthorizedAccount"
+      );
+    });
+  });
 });
