@@ -87,4 +87,121 @@ contract AgroStaking is AccessControl, Pausable, ReentrancyGuard {
         _grantRole(PAUSER_ROLE, admin);
         _grantRole(PARAMETER_ROLE, admin);
     }
+
+    function stake(uint256 amount) external nonReentrant whenNotPaused {
+        require(amount >= minStake, "min stake");
+
+        _accrue(msg.sender);
+
+        token.safeTransferFrom(msg.sender, address(this), amount);
+
+        StakeInfo storage userStake = stakeInfo[msg.sender];
+        userStake.amount += amount;
+        userStake.lastAccrual = uint64(block.timestamp);
+
+        emit Staked(msg.sender, amount);
+    }
+
+    function claim() external nonReentrant whenNotPaused {
+        _accrue(msg.sender);
+
+        StakeInfo storage userStake = stakeInfo[msg.sender];
+        uint256 reward = userStake.unclaimed;
+
+        require(reward > 0, "no rewards");
+
+        userStake.unclaimed = 0;
+        token.safeTransfer(msg.sender, reward);
+
+        emit Claimed(msg.sender, reward);
+    }
+
+    function unstake(uint256 amount) external nonReentrant whenNotPaused {
+        require(amount > 0, "invalid amount");
+
+        _accrue(msg.sender);
+
+        StakeInfo storage userStake = stakeInfo[msg.sender];
+        require(userStake.amount >= amount, "insufficient stake");
+
+        userStake.amount -= amount;
+        userStake.lastAccrual = uint64(block.timestamp);
+
+        token.safeTransfer(msg.sender, amount);
+
+        emit Unstaked(msg.sender, amount);
+    }
+
+    function earned(address user) external view returns (uint256) {
+        StakeInfo storage userStake = stakeInfo[user];
+
+        if (userStake.amount == 0) {
+            return userStake.unclaimed;
+        }
+
+        return userStake.unclaimed + _pendingReward(userStake.amount, userStake.lastAccrual);
+    }
+
+    function currentAprBps() external view returns (uint256) {
+        (, int256 price,,,) = _latestValidRoundData();
+        return _currentAprBps(price);
+    }
+
+    function _accrue(address user) internal {
+        StakeInfo storage userStake = stakeInfo[user];
+
+        if (userStake.amount == 0) {
+            userStake.lastAccrual = uint64(block.timestamp);
+            return;
+        }
+
+        uint256 reward = _pendingReward(userStake.amount, userStake.lastAccrual);
+
+        if (reward > 0) {
+            userStake.unclaimed += reward;
+        }
+
+        userStake.lastAccrual = uint64(block.timestamp);
+    }
+
+    function _pendingReward(uint256 amount, uint64 lastAccrual) internal view returns (uint256) {
+        if (amount == 0 || lastAccrual == 0 || block.timestamp <= lastAccrual) {
+            return 0;
+        }
+
+        (, int256 price,,,) = _latestValidRoundData();
+        uint256 aprBps = _currentAprBps(price);
+        uint256 dt = block.timestamp - lastAccrual;
+
+        return (amount * aprBps * dt) / (365 days * 10_000);
+    }
+
+    function _currentAprBps(int256 price) internal view returns (uint256) {
+        if (price < floorPrice) {
+            return (baseAprBps * 90) / 100;
+        }
+
+        if (price > ceilingPrice) {
+            return (baseAprBps * 110) / 100;
+        }
+
+        return baseAprBps;
+    }
+
+    function _latestValidRoundData()
+        internal
+        view
+        returns (
+            uint80 roundId,
+            int256 answer,
+            uint256 startedAt,
+            uint256 updatedAt,
+            uint80 answeredInRound
+        )
+    {
+        (roundId, answer, startedAt, updatedAt, answeredInRound) = priceFeed.latestRoundData();
+
+        require(answer > 0, "bad oracle");
+        require(block.timestamp - updatedAt <= staleThreshold, "stale oracle");
+    }
 }
