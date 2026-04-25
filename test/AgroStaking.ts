@@ -381,4 +381,107 @@ describe("AgroStaking", function () {
       expect(userStake.lastAccrual).to.be.greaterThan(0n);
     });
   });
+
+  describe("claiming and unstaking", function () {
+    it("reverts claim when there are no rewards", async function () {
+      const { staking, user } = await loadFixture(deployAgroStakingFixture);
+
+      await expect(staking.connect(user).claim()).to.be.revertedWith("no rewards");
+    });
+
+    it("claims accrued rewards and resets unclaimed balance", async function () {
+      const { staking, token, admin, user, minStake } = await loadFixture(deployAgroStakingFixture);
+      const rewardFunding = ethers.parseUnits("10000", 18);
+
+      await token.mint(user.address, minStake);
+      await token.mint(admin.address, rewardFunding);
+      await token.connect(user).approve(await staking.getAddress(), minStake);
+      await token.connect(admin).transfer(await staking.getAddress(), rewardFunding);
+
+      await staking.connect(user).stake(minStake);
+      await time.increase(60 * 60);
+
+      const earnedBeforeClaim = await staking.earned(user.address);
+      const balanceBeforeClaim = await token.balanceOf(user.address);
+
+      await expect(staking.connect(user).claim()).to.emit(staking, "Claimed");
+
+      const userStake = await staking.stakeInfo(user.address);
+      const balanceAfterClaim = await token.balanceOf(user.address);
+
+      expect(earnedBeforeClaim).to.be.greaterThan(0n);
+      expect(userStake.unclaimed).to.equal(0n);
+      expect(balanceAfterClaim).to.be.greaterThan(balanceBeforeClaim);
+    });
+
+    it("unstakes tokens and reduces the user position", async function () {
+      const { staking, token, user, minStake } = await loadFixture(deployAgroStakingFixture);
+
+      await token.mint(user.address, minStake * 2n);
+      await token.connect(user).approve(await staking.getAddress(), minStake * 2n);
+      await staking.connect(user).stake(minStake * 2n);
+
+      await expect(staking.connect(user).unstake(minStake))
+        .to.emit(staking, "Unstaked")
+        .withArgs(user.address, minStake);
+
+      const userStake = await staking.stakeInfo(user.address);
+
+      expect(userStake.amount).to.equal(minStake);
+      expect(await token.balanceOf(user.address)).to.equal(minStake);
+    });
+
+    it("reverts unstake with zero amount", async function () {
+      const { staking, user } = await loadFixture(deployAgroStakingFixture);
+
+      await expect(staking.connect(user).unstake(0)).to.be.revertedWith("invalid amount");
+    });
+
+    it("reverts unstake when the amount exceeds the user stake", async function () {
+      const { staking, token, user, minStake } = await loadFixture(deployAgroStakingFixture);
+
+      await token.mint(user.address, minStake);
+      await token.connect(user).approve(await staking.getAddress(), minStake);
+      await staking.connect(user).stake(minStake);
+
+      await expect(staking.connect(user).unstake(minStake + 1n)).to.be.revertedWith("insufficient stake");
+    });
+
+    it("preserves unclaimed rewards on partial unstake", async function () {
+      const { staking, token, admin, user, minStake } = await loadFixture(deployAgroStakingFixture);
+      const rewardFunding = ethers.parseUnits("10000", 18);
+
+      await token.mint(user.address, minStake * 2n);
+      await token.mint(admin.address, rewardFunding);
+      await token.connect(user).approve(await staking.getAddress(), minStake * 2n);
+      await token.connect(admin).transfer(await staking.getAddress(), rewardFunding);
+
+      await staking.connect(user).stake(minStake * 2n);
+      await time.increase(60 * 60);
+
+      const earnedBeforeUnstake = await staking.earned(user.address);
+
+      await staking.connect(user).unstake(minStake);
+
+      const userStake = await staking.stakeInfo(user.address);
+
+      expect(earnedBeforeUnstake).to.be.greaterThan(0n);
+      expect(userStake.amount).to.equal(minStake);
+      expect(userStake.unclaimed).to.be.greaterThanOrEqual(earnedBeforeUnstake);
+    });
+
+    it("supports full unstake", async function () {
+      const { staking, token, user, minStake } = await loadFixture(deployAgroStakingFixture);
+
+      await token.mint(user.address, minStake);
+      await token.connect(user).approve(await staking.getAddress(), minStake);
+      await staking.connect(user).stake(minStake);
+      await staking.connect(user).unstake(minStake);
+
+      const userStake = await staking.stakeInfo(user.address);
+
+      expect(userStake.amount).to.equal(0n);
+      expect(await token.balanceOf(user.address)).to.equal(minStake);
+    });
+  });
 });
