@@ -491,4 +491,192 @@ describe("AgroDAO", function () {
       expect(proposal.forVotes).to.equal(proposalThreshold);
     });
   });
+
+  describe("state and execution", function () {
+    async function deployExecutableAgroDAOFixture() {
+      const fixture = await deployProposableAgroDAOFixture();
+      const { dao, staking, user, admin, token, quorumVotes } = fixture;
+
+      await token.connect(admin).delegate(admin.address);
+      await mine();
+
+      await staking.connect(admin).grantRole(await staking.PARAMETER_ROLE(), await dao.getAddress());
+
+      const newAprBps = 150_000n;
+      const data = staking.interface.encodeFunctionData("setApr", [newAprBps]);
+
+      await dao.connect(user).propose(await staking.getAddress(), 0, data, "Update APR");
+
+      return { ...fixture, proposalId: 1n, data, newAprBps, adminVotes: quorumVotes };
+    }
+
+    it("returns Unknown for a non-existent proposal", async function () {
+      const { dao } = await loadFixture(deployAgroDAOFixture);
+
+      expect(await dao.state(999n)).to.equal(0);
+    });
+
+    it("returns Pending before the snapshot block", async function () {
+      const { dao, proposalId } = await loadFixture(deployExecutableAgroDAOFixture);
+
+      expect(await dao.state(proposalId)).to.equal(1);
+    });
+
+    it("returns Active during the voting window", async function () {
+      const { dao, proposalId } = await loadFixture(deployExecutableAgroDAOFixture);
+
+      await mine(2);
+
+      expect(await dao.state(proposalId)).to.equal(2);
+    });
+
+    it("returns Defeated when quorum is not reached", async function () {
+      const { dao, proposalId, votingDelay, votingPeriod, user } = await loadFixture(deployExecutableAgroDAOFixture);
+
+      await mine(2);
+      await dao.connect(user).vote(proposalId, true);
+      await mine(votingDelay + votingPeriod + 1);
+
+      expect(await dao.state(proposalId)).to.equal(3);
+    });
+
+    it("returns Defeated when against votes are greater than or equal to for votes", async function () {
+      const { dao, proposalId, votingDelay, votingPeriod, user, admin } = await loadFixture(deployExecutableAgroDAOFixture);
+
+      await mine(2);
+      await dao.connect(user).vote(proposalId, true);
+      await dao.connect(admin).vote(proposalId, false);
+      await mine(votingDelay + votingPeriod + 1);
+
+      expect(await dao.state(proposalId)).to.equal(3);
+    });
+
+    it("returns Succeeded when quorum is reached and for votes win", async function () {
+      const { dao, proposalId, votingDelay, votingPeriod, admin } = await loadFixture(deployExecutableAgroDAOFixture);
+
+      await mine(2);
+      await dao.connect(admin).vote(proposalId, true);
+      await mine(votingDelay + votingPeriod + 1);
+
+      expect(await dao.state(proposalId)).to.equal(4);
+    });
+
+    it("executes a successful proposal against an allowed target", async function () {
+      const { dao, staking, proposalId, newAprBps, admin, votingDelay, votingPeriod } =
+        await loadFixture(deployExecutableAgroDAOFixture);
+
+      await mine(2);
+      await dao.connect(admin).vote(proposalId, true);
+      await mine(votingDelay + votingPeriod + 1);
+
+      await expect(dao.connect(admin).execute(proposalId, { value: 0 }))
+        .to.emit(dao, "Executed")
+        .withArgs(proposalId, await staking.getAddress(), 0n);
+
+      expect(await staking.baseAprBps()).to.equal(newAprBps);
+    });
+
+    it("marks a proposal as executed", async function () {
+      const { dao, proposalId, admin, votingDelay, votingPeriod } = await loadFixture(deployExecutableAgroDAOFixture);
+
+      await mine(2);
+      await dao.connect(admin).vote(proposalId, true);
+      await mine(votingDelay + votingPeriod + 1);
+      await dao.connect(admin).execute(proposalId, { value: 0 });
+
+      const proposal = await dao.proposals(proposalId);
+
+      expect(proposal.executed).to.equal(true);
+      expect(await dao.state(proposalId)).to.equal(5);
+    });
+
+    it("reverts execution before voting has ended", async function () {
+      const { dao, proposalId, admin } = await loadFixture(deployExecutableAgroDAOFixture);
+
+      await expect(dao.connect(admin).execute(proposalId, { value: 0 })).to.be.revertedWith("voting still active");
+    });
+
+    it("reverts execution for an unknown proposal", async function () {
+      const { dao, admin } = await loadFixture(deployAgroDAOFixture);
+
+      await expect(dao.connect(admin).execute(999n, { value: 0 })).to.be.revertedWith("unknown proposal");
+    });
+
+    it("reverts execution when quorum is not reached", async function () {
+      const { dao, proposalId, user, votingDelay, votingPeriod, admin } = await loadFixture(deployExecutableAgroDAOFixture);
+
+      await mine(2);
+      await dao.connect(user).vote(proposalId, true);
+      await mine(votingDelay + votingPeriod + 1);
+
+      await expect(dao.connect(admin).execute(proposalId, { value: 0 })).to.be.revertedWith("quorum not reached");
+    });
+
+    it("reverts execution when the proposal is defeated", async function () {
+      const { dao, proposalId, user, admin, votingDelay, votingPeriod, proposalThreshold } =
+        await loadFixture(deployExecutableAgroDAOFixture);
+
+      await dao.connect(admin).setVotingParams(proposalThreshold, proposalThreshold, votingDelay, votingPeriod);
+
+      await mine(2);
+      await dao.connect(user).vote(proposalId, true);
+      await dao.connect(admin).vote(proposalId, false);
+      await mine(votingDelay + votingPeriod + 1);
+
+      await expect(dao.connect(admin).execute(proposalId, { value: 0 })).to.be.revertedWith("proposal defeated");
+    });
+
+    it("reverts executing the same proposal twice", async function () {
+      const { dao, proposalId, admin, votingDelay, votingPeriod } = await loadFixture(deployExecutableAgroDAOFixture);
+
+      await mine(2);
+      await dao.connect(admin).vote(proposalId, true);
+      await mine(votingDelay + votingPeriod + 1);
+      await dao.connect(admin).execute(proposalId, { value: 0 });
+
+      await expect(dao.connect(admin).execute(proposalId, { value: 0 })).to.be.revertedWith("proposal already executed");
+    });
+
+    it("reverts execution if the target was removed from the allowlist", async function () {
+      const { dao, staking, proposalId, admin, votingDelay, votingPeriod } = await loadFixture(deployExecutableAgroDAOFixture);
+
+      await mine(2);
+      await dao.connect(admin).vote(proposalId, true);
+      await mine(votingDelay + votingPeriod + 1);
+      await dao.connect(admin).setAllowedTarget(await staking.getAddress(), false);
+
+      await expect(dao.connect(admin).execute(proposalId, { value: 0 })).to.be.revertedWith("target not allowed");
+    });
+
+    it("reverts execution when msg.value does not match proposal.value", async function () {
+      const { dao, proposalId, admin, votingDelay, votingPeriod } = await loadFixture(deployExecutableAgroDAOFixture);
+
+      await mine(2);
+      await dao.connect(admin).vote(proposalId, true);
+      await mine(votingDelay + votingPeriod + 1);
+
+      await expect(dao.connect(admin).execute(proposalId, { value: 1n })).to.be.revertedWith("invalid value");
+    });
+
+    it("reverts execution when the target call fails", async function () {
+      const { dao, staking, user, admin, token, quorumVotes, votingDelay, votingPeriod } =
+        await loadFixture(deployProposableAgroDAOFixture);
+
+      await token.connect(admin).delegate(admin.address);
+      await mine();
+
+      const badData = staking.interface.encodeFunctionData("setApr", [0]);
+      await dao.connect(user).propose(await staking.getAddress(), 0, badData, "Invalid APR update");
+
+      const proposalId = 1n;
+
+      await mine(2);
+      await dao.connect(admin).vote(proposalId, true);
+      await mine(votingDelay + votingPeriod + 1);
+
+      expect(await dao.quorumVotes()).to.equal(quorumVotes);
+
+      await expect(dao.connect(admin).execute(proposalId, { value: 0 })).to.be.revertedWith("execution failed");
+    });
+  });
 });
