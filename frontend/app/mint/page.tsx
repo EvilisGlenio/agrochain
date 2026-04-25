@@ -58,7 +58,7 @@ export default function MintPage() {
   }
 
   return (
-    <div className="grid" style={{ gridTemplateColumns: "minmax(0, 1.2fr) minmax(280px, 0.8fr)" }}>
+    <div className="page-grid">
       <Card>
         <CardHeader>
           <CardTitle>Mint Lot NFT</CardTitle>

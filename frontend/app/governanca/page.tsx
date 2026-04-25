@@ -7,8 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { getDaoContract, getMissingAddressKeys, getReadContracts, getWriteContracts } from "@/lib/contracts";
-import { connectWallet, getBrowserProvider, getWalletErrorMessage, hasEthereum } from "@/lib/web3";
+import { getMissingAddressKeys, getReadContracts, getWriteContracts } from "@/lib/contracts";
+import { connectWallet, getBrowserProvider, getConnectedWallet, getWalletErrorMessage, hasEthereum } from "@/lib/web3";
 
 type GovernanceSnapshot = {
   address: string;
@@ -45,8 +45,13 @@ export default function GovernancePage() {
 
     try {
       const provider = getBrowserProvider();
-      const { address } = await connectWallet();
-      const walletAddress = addressOverride ?? address;
+      const connectedWallet = await getConnectedWallet();
+
+      if (!connectedWallet && !addressOverride) {
+        return;
+      }
+
+      const walletAddress = addressOverride ?? connectedWallet!.address;
       const contracts = await getReadContracts(provider);
       const proposalCount = await contracts.dao.proposalCount();
 
@@ -85,8 +90,6 @@ export default function GovernancePage() {
       const provider = getBrowserProvider();
       const { dao, signer } = await getWriteContracts(provider);
       const staking = getDaoProposalTarget();
-      const daoInterface = getDaoContract(signer);
-      void daoInterface;
 
       const stakingInterface = new ethers.Interface([
         "function setApr(uint256 newAprBps)",
@@ -157,7 +160,7 @@ export default function GovernancePage() {
   }, []);
 
   return (
-    <div className="grid" style={{ gridTemplateColumns: "minmax(0, 1.15fr) minmax(280px, 0.85fr)" }}>
+    <div className="page-grid">
       <Card>
         <CardHeader>
           <CardTitle>Governanca</CardTitle>

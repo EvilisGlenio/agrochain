@@ -42,6 +42,26 @@ export async function connectWallet() {
   };
 }
 
+export async function getConnectedWallet() {
+  const provider = getBrowserProvider();
+  const accounts = (await provider.send("eth_accounts", [])) as string[];
+
+  if (accounts.length === 0) {
+    return null;
+  }
+
+  const signer = await provider.getSigner();
+  const address = await signer.getAddress();
+  const network = await provider.getNetwork();
+
+  return {
+    provider,
+    signer,
+    address,
+    network,
+  };
+}
+
 export async function getSigner(): Promise<JsonRpcSigner> {
   const { signer } = await connectWallet();
   return signer;
