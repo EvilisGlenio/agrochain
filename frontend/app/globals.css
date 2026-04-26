@@ -1,16 +1,20 @@
 :root {
   color-scheme: light;
   --background: #ffffff;
-  --foreground: #0a0b0d;
-  --muted: #eef0f3;
-  --muted-foreground: #5b616e;
-  --border: rgba(91, 97, 110, 0.2);
+  --foreground: #123524;
+  --muted: #eef4ee;
+  --muted-foreground: #5b6f62;
+  --border: rgba(24, 95, 52, 0.14);
   --card: #ffffff;
-  --dark: #0a0b0d;
-  --dark-card: #282b31;
-  --accent: #0052ff;
-  --accent-hover: #578bfa;
-  --accent-link: #0667d0;
+  --dark: #123524;
+  --dark-card: #1d4733;
+  --accent: #2f8f1f;
+  --accent-hover: #3fa428;
+  --accent-link: #237317;
+  --accent-soft: rgba(47, 143, 31, 0.1);
+  --accent-strong: rgba(47, 143, 31, 0.18);
+  --gold: #c79816;
+  --gold-soft: rgba(199, 152, 22, 0.12);
   --accent-foreground: #ffffff;
 }
 
@@ -34,7 +38,7 @@ html,
 body {
   margin: 0;
   min-height: 100%;
-  background: linear-gradient(180deg, #ffffff 0%, #f7f7f7 50%, #eef0f3 100%);
+  background: linear-gradient(180deg, #ffffff 0%, #f7faf4 52%, #eef4ee 100%);
   color: var(--foreground);
   font-family: Inter, Arial, Helvetica, sans-serif;
 }
@@ -93,6 +97,17 @@ body {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  max-width: 220px;
+}
+
+.brand__logo {
+  display: inline-flex;
+  align-items: center;
+}
+
+.brand__logo img {
+  width: 100%;
+  height: auto;
 }
 
 .brand__title {
@@ -147,10 +162,10 @@ body {
   align-items: center;
   width: fit-content;
   padding: 8px 12px;
-  border: 1px solid rgba(0, 82, 255, 0.18);
+  border: 1px solid var(--accent-strong);
   border-radius: 56px;
-  background: rgba(0, 82, 255, 0.08);
-  color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-link);
   font-size: 0.875rem;
   font-weight: 700;
 }
@@ -187,7 +202,7 @@ body {
 }
 
 .hero__link:hover {
-  color: var(--accent);
+  color: var(--gold);
 }
 
 .highlights {
@@ -202,12 +217,13 @@ body {
   border: 1px solid var(--border);
   border-radius: 24px;
   background: rgba(255, 255, 255, 0.72);
+  box-shadow: inset 0 1px 0 rgba(199, 152, 22, 0.08);
 }
 
 .highlight__value {
   display: block;
   margin-bottom: 6px;
-  color: var(--accent);
+  color: var(--gold);
   font-size: 1.5rem;
   font-weight: 700;
   letter-spacing: -0.04em;
@@ -228,7 +244,7 @@ body {
   gap: 20px;
   padding: clamp(24px, 4vw, 40px);
   border-radius: 40px;
-  background: var(--dark);
+  background: linear-gradient(135deg, #123524 0%, #1c5a32 100%);
   color: #ffffff;
 }
 
@@ -257,10 +273,11 @@ body {
   border: 1px solid var(--border);
   border-radius: 32px;
   background: rgba(255, 255, 255, 0.88);
+  box-shadow: inset 0 1px 0 rgba(199, 152, 22, 0.06);
 }
 
 .feature-card__eyebrow {
-  color: var(--accent);
+  color: var(--gold);
   font-size: 0.8125rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -284,6 +301,7 @@ body {
   border: 1px solid var(--border);
   border-radius: 32px;
   background: rgba(255, 255, 255, 0.88);
+  box-shadow: inset 0 1px 0 rgba(199, 152, 22, 0.06);
 }
 
 .status-panel__header {
@@ -311,7 +329,7 @@ body {
   gap: 8px;
   padding: 20px;
   border-radius: 24px;
-  background: #f7f7f7;
+  background: #f6faf4;
 }
 
 .status-card__label {
@@ -345,6 +363,10 @@ body {
   font-size: 0.875rem;
 }
 
+.contract-pill strong {
+  color: var(--accent-link);
+}
+
 .journey {
   display: grid;
   gap: 20px;
@@ -367,7 +389,7 @@ body {
   gap: 12px;
   padding: 24px;
   border-radius: 32px;
-  background: var(--dark);
+  background: linear-gradient(135deg, #123524 0%, #185f34 100%);
   color: #ffffff;
 }
 
@@ -377,14 +399,14 @@ body {
 
 .step-card .card__link {
   width: fit-content;
-  background: #ffffff;
+  background: rgba(255, 255, 255, 0.98);
   color: var(--foreground);
-  border-color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.98);
 }
 
 .step-card .card__link:hover {
-  background: var(--accent-hover);
-  border-color: var(--accent-hover);
+  background: var(--gold);
+  border-color: var(--gold);
   color: #ffffff;
 }
 
@@ -418,8 +440,8 @@ body {
 }
 
 .notice--success {
-  border: 1px solid rgba(0, 82, 255, 0.18);
-  background: rgba(0, 82, 255, 0.08);
+  border: 1px solid var(--accent-strong);
+  background: var(--accent-soft);
   color: var(--foreground);
 }
 
@@ -468,8 +490,8 @@ body {
 }
 
 .card__link:hover {
-  background: var(--accent-hover);
-  border-color: var(--accent-hover);
+  background: var(--gold);
+  border-color: var(--gold);
   color: var(--accent-foreground);
 }
 
@@ -609,7 +631,7 @@ body {
 
 .ui-input:focus {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(0, 82, 255, 0.12);
+  box-shadow: 0 0 0 3px rgba(47, 143, 31, 0.14);
 }
 
 .ui-label {

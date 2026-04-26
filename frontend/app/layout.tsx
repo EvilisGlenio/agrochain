@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 import "./globals.css";
 
@@ -22,8 +23,9 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           <header className="app-header">
             <div className="app-header__inner">
               <div className="brand">
-                <h1 className="brand__title">AgroChain</h1>
-                <p className="brand__subtitle">Token, NFT, staking e DAO</p>
+                <Link href="/" className="brand__logo" aria-label="AgroChain">
+                  <Image src="/agrochain.png" alt="AgroChain" width={220} height={64} priority />
+                </Link>
               </div>
 
               <nav className="nav" aria-label="Primary">
