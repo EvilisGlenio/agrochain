@@ -3,10 +3,11 @@ pragma solidity ^0.8.28;
 
 import { AccessControl } from "@openzeppelin/contracts/access/AccessControl.sol";
 import { Pausable } from "@openzeppelin/contracts/utils/Pausable.sol";
+import { ReentrancyGuard } from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import { ERC721 } from "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import { ERC721URIStorage } from "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
 
-contract AgroLotNFT is ERC721, ERC721URIStorage, AccessControl, Pausable {
+contract AgroLotNFT is ERC721, ERC721URIStorage, AccessControl, Pausable, ReentrancyGuard {
     bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
 
@@ -38,6 +39,7 @@ contract AgroLotNFT is ERC721, ERC721URIStorage, AccessControl, Pausable {
         external
         onlyRole(MINTER_ROLE)
         whenNotPaused
+        nonReentrant
         returns (uint256 tokenId)
     {
         tokenId = nextTokenId;

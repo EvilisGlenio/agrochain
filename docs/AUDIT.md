@@ -140,6 +140,7 @@ Proteção contra reentrancy foi aplicada nos contratos com operações mais sen
 
 Pontos esperados:
 
+- `AgroLotNFT`: `mintLot`
 - `AgroStaking`: `stake`, `claim`, `unstake`
 - `AgroDAO`: `execute`
 
@@ -191,6 +192,7 @@ Pontos positivos:
 - uso de `ERC721URIStorage`
 - modelo adequado para ativos únicos
 - mint protegido por papel administrativo
+- `mintLot` protegido com `nonReentrant`
 
 Pontos de atenção:
 
@@ -269,9 +271,10 @@ Pontos de atenção:
   - a função já usa `nonReentrant`, checagem de estado e restrição de alvos permitidos
 
 - `Slither` apontou `reentrancy-benign` e `reentrancy-events` em `AgroLotNFT.mintLot`
-- avaliação: `monitorar, mas sem evidência de exploração prática no escopo atual`
+- avaliação: `mitigado no código`
 - justificativa:
   - o alerta decorre de `_safeMint` seguido de gravação de estado e emissão de evento
+  - após a auditoria, `mintLot` passou a usar `ReentrancyGuard` com `nonReentrant`
   - o mint é restrito por papel administrativo
   - não há fluxo econômico direto associado ao ponto indicado
 
@@ -317,7 +320,6 @@ Mesmo com os controles aplicados, permanecem riscos residuais típicos de MVP:
 
 ### Antes da entrega
 
-- revisar se `AgroLotNFT.mintLot` deve ser reordenado para gravar estado antes de `_safeMint`, caso se queira reduzir o ruído do Slither
 - decidir se `AgroStaking.minStake` deve virar `immutable` como melhoria de qualidade
 - repetir Mythril a partir do código-fonte caso o ambiente permita resolver o download do `solc`, apenas para aumentar confiança do relatório final
 - anexar no PDF final o resumo dos achados desta auditoria
