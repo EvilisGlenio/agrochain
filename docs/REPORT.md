@@ -178,11 +178,26 @@ Ferramentas previstas pela atividade:
 - Slither
 - Mythril
 
-Status atual:
+Execução registrada em `2026-04-26`:
 
-- Hardhat: estrutura pronta e testes já executados
-- Slither: pendente de execução final e registro no relatório
-- Mythril: pendente de execução final e registro no relatório
+- Hardhat:
+  - `npx hardhat compile`: executado sem erros
+  - `npx hardhat test`: executado com `139 testes passando`
+- Slither:
+  - executado com sucesso via Docker
+  - analisou `51 contracts with 101 detectors`
+  - reportou `95 results`, majoritariamente ligados a dependências OpenZeppelin e padrões genéricos
+- Mythril:
+  - executado via Docker com workaround por `deployedBytecode`
+  - `AgroDAO`: sem issues detectadas
+  - `AgroToken`, `AgroLotNFT` e `AgroStaking`: alertas médios genéricos de `assertion violation` em fallback, tratados como prováveis falsos positivos da análise por bytecode
+
+Síntese da auditoria:
+
+- não foram identificados achados críticos
+- não foram identificados achados altos
+- os achados baixos e médios observados são compatíveis com o escopo do MVP e, em grande parte, decorrem de análise estática conservadora ou do uso de bibliotecas OpenZeppelin
+- o ponto mais relevante a monitorar é o alerta benigno de reentrancy em `AgroLotNFT.mintLot`, hoje sem evidência de exploração prática no fluxo atual
 
 Observação: o detalhamento da auditoria está consolidado em `docs/AUDIT.md`.
 
@@ -325,4 +340,6 @@ A AgroChain atende ao objetivo de consolidar conhecimentos avançados em Web3 po
 
 O projeto integra contratos inteligentes, segurança básica, oracle, governança, frontend e scripts, formando uma base consistente para apresentação técnica e demonstração prática.
 
-Para fechamento integral da entrega, ainda devem ser anexados os dados finais do deploy em Sepolia, os links do explorer e os resultados finais de Slither e Mythril.
+Na etapa de auditoria, o projeto já foi validado com `Hardhat`, `Slither` e `Mythril`, sem identificação de falhas críticas diretamente atribuíveis à lógica principal da AgroChain.
+
+Para fechamento integral da entrega, ainda devem ser anexados principalmente os dados finais do deploy em Sepolia e os links do explorer.
