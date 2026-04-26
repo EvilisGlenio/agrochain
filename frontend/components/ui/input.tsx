@@ -5,10 +5,7 @@ const Input = React.forwardRef<HTMLInputElement, React.ComponentProps<"input">>(
   return (
     <input
       ref={ref}
-      className={cn(
-        "flex h-11 w-full rounded-xl border border-[#27272a] bg-[#09090b] px-3 py-2 text-sm text-[#fafafa] outline-none transition-colors placeholder:text-[#71717a] focus:border-[#84cc16] disabled:cursor-not-allowed disabled:opacity-50",
-        className
-      )}
+      className={cn("ui-input", className)}
       {...props}
     />
   );

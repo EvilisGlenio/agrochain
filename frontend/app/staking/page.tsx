@@ -25,7 +25,7 @@ const emptySnapshot: StakingSnapshot = {
   stakedAmount: "0",
   unclaimedRewards: "0",
   earned: "0",
-  currentAprBps: "unavailable",
+  currentAprBps: "indisponível",
 };
 
 export default function StakingPage() {
@@ -39,6 +39,7 @@ export default function StakingPage() {
   const [isClaiming, setIsClaiming] = useState(false);
 
   const missingAddressKeys = getMissingAddressKeys();
+  const hasSuccess = Boolean(txHash) && !error;
 
   async function loadSnapshot(addressOverride?: string) {
     if (missingAddressKeys.length > 0 || !hasEthereum()) {
@@ -64,7 +65,7 @@ export default function StakingPage() {
       ]);
 
       let earned = BigInt(0);
-      let currentAprBps = "unavailable";
+      let currentAprBps = "indisponível";
 
       try {
         earned = await contracts.staking.earned(walletAddress);
@@ -75,7 +76,7 @@ export default function StakingPage() {
       try {
         currentAprBps = (await contracts.staking.currentAprBps()).toString();
       } catch {
-        currentAprBps = "unavailable";
+        currentAprBps = "indisponível";
       }
 
       setSnapshot({
@@ -168,15 +169,16 @@ export default function StakingPage() {
     <div className="page-grid">
       <Card>
         <CardHeader>
-          <CardTitle>Stake AGRO</CardTitle>
+          <CardTitle>Staking de AGRO</CardTitle>
           <CardDescription>
-            Approve AGRO for the staking contract, lock tokens, and claim rewards as they accrue.
+            Aprove AGRO para o contrato de staking, bloqueie tokens e resgate recompensas acumuladas.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div style={{ display: "grid", gap: 16 }}>
             <div style={{ display: "grid", gap: 8 }}>
-              <Label htmlFor="stake-amount">Amount</Label>
+              <Label htmlFor="stake-amount">Quantidade</Label>
+              <p className="field-hint">Informe a quantidade de AGRO que deseja bloquear no contrato de staking.</p>
               <Input
                 id="stake-amount"
                 value={amount}
@@ -188,7 +190,7 @@ export default function StakingPage() {
             <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
               <Button onClick={handleConnect} variant="secondary" disabled={isConnecting || !hasEthereum()}>
                 {isConnecting ? <Loader2 size={16} className="animate-spin" /> : <Wallet size={16} />}
-                {snapshot.address ? "Wallet Connected" : "Connect Wallet"}
+                {snapshot.address ? "Carteira conectada" : "Conectar carteira"}
               </Button>
 
               <Button
@@ -196,12 +198,12 @@ export default function StakingPage() {
                 disabled={isStaking || !amount.trim() || missingAddressKeys.length > 0}
               >
                 {isStaking ? <Loader2 size={16} className="animate-spin" /> : null}
-                Approve + Stake
+                Aprovar + fazer staking
               </Button>
 
               <Button onClick={handleClaim} variant="outline" disabled={isClaiming || missingAddressKeys.length > 0}>
                 {isClaiming ? <Loader2 size={16} className="animate-spin" /> : null}
-                Claim
+                Resgatar
               </Button>
             </div>
           </div>
@@ -210,28 +212,42 @@ export default function StakingPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Staking Status</CardTitle>
-          <CardDescription>Snapshot of the connected wallet position.</CardDescription>
+          <CardTitle>Status do staking</CardTitle>
+          <CardDescription>Resumo da posição da carteira conectada.</CardDescription>
         </CardHeader>
         <CardContent>
           <div style={{ display: "grid", gap: 12 }}>
-            <StatusRow label="Wallet" value={snapshot.address || "Not connected"} />
-            <StatusRow label="AGRO balance" value={snapshot.agroBalance} />
-            <StatusRow label="Staked amount" value={snapshot.stakedAmount} />
-            <StatusRow label="Unclaimed" value={snapshot.unclaimedRewards} />
-            <StatusRow label="Earned" value={snapshot.earned} />
-            <StatusRow label="Current APR (bps)" value={snapshot.currentAprBps} />
+            {hasSuccess ? (
+              <div className="notice notice--success">
+                Transação concluída. Agora vale atualizar os dados e seguir para a governança para demonstrar voto com saldo delegado.
+              </div>
+            ) : null}
+
+            <StatusRow label="Carteira" value={snapshot.address || "Não conectada"} />
+            <StatusRow label="Saldo AGRO" value={snapshot.agroBalance} />
+            <StatusRow label="Quantidade em staking" value={snapshot.stakedAmount} />
+            <StatusRow label="Não resgatado" value={snapshot.unclaimedRewards} />
+            <StatusRow label="Acumulado" value={snapshot.earned} />
+            <StatusRow label="APR atual (bps)" value={snapshot.currentAprBps} />
             <StatusRow
-              label="Configured contracts"
+              label="Contratos configurados"
               value={
                 missingAddressKeys.length === 0
-                  ? "All required contract addresses are configured."
-                  : `Missing NEXT_PUBLIC values for: ${missingAddressKeys.join(", ")}`
+                  ? "Todos os endereços necessários estão configurados."
+                  : `Valores NEXT_PUBLIC ausentes para: ${missingAddressKeys.join(", ")}`
               }
             />
-            <StatusRow label="Last transaction" value={txHash || "No transaction submitted yet"} breakAll />
-            <StatusRow label="Error" value={error || "No errors"} tone={error ? "error" : "muted"} breakAll />
-            <StatusRow label="Loading" value={isLoading ? "Refreshing on-chain state..." : "Idle"} />
+            <StatusRow label="Última transação" value={txHash || "Nenhuma transação enviada ainda"} breakAll />
+            <StatusRow label="Erro" value={error || "Sem erros"} tone={error ? "error" : "muted"} breakAll />
+            <StatusRow label="Carregamento" value={isLoading ? "Atualizando estado on-chain..." : "Ocioso"} />
+            <StatusRow
+              label="Próximo passo"
+              value={
+                hasSuccess
+                  ? "Se os votos já estiverem delegados, abra a governança para criar ou votar em uma proposta."
+                  : "Conecte a carteira, aprove AGRO e execute o staking para mostrar recompensas e posição on-chain."
+              }
+            />
           </div>
         </CardContent>
       </Card>

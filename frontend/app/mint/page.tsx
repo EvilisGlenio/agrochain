@@ -19,6 +19,7 @@ export default function MintPage() {
   const [isMinting, setIsMinting] = useState(false);
 
   const missingAddressKeys = getMissingAddressKeys();
+  const hasSuccess = Boolean(txHash) && !error;
 
   async function handleConnect() {
     setError("");
@@ -61,15 +62,16 @@ export default function MintPage() {
     <div className="page-grid">
       <Card>
         <CardHeader>
-          <CardTitle>Mint Lot NFT</CardTitle>
+          <CardTitle>Emitir NFT de Lote</CardTitle>
           <CardDescription>
-            Create a unique agro lot NFT by providing a metadata URI and a product type.
+            Crie um NFT único para um lote agro usando uma URI de metadados e o tipo do produto.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div style={{ display: "grid", gap: 16 }}>
             <div style={{ display: "grid", gap: 8 }}>
-              <Label htmlFor="token-uri">Token URI</Label>
+              <Label htmlFor="token-uri">URI do token</Label>
+              <p className="field-hint">Exemplo: link IPFS ou JSON público com os metadados do lote.</p>
               <Input
                 id="token-uri"
                 value={tokenUri}
@@ -79,7 +81,8 @@ export default function MintPage() {
             </div>
 
             <div style={{ display: "grid", gap: 8 }}>
-              <Label htmlFor="product-type">Product Type</Label>
+              <Label htmlFor="product-type">Tipo do produto</Label>
+              <p className="field-hint">Exemplo: queijo, café, soja ou cacau.</p>
               <Input
                 id="product-type"
                 value={productType}
@@ -91,7 +94,7 @@ export default function MintPage() {
             <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
               <Button onClick={handleConnect} variant="secondary" disabled={isConnecting || !hasEthereum()}>
                 {isConnecting ? <Loader2 size={16} className="animate-spin" /> : <Wallet size={16} />}
-                {address ? "Wallet Connected" : "Connect Wallet"}
+                {address ? "Carteira conectada" : "Conectar carteira"}
               </Button>
 
               <Button
@@ -99,7 +102,7 @@ export default function MintPage() {
                 disabled={isMinting || !tokenUri.trim() || !productType.trim() || missingAddressKeys.length > 0}
               >
                 {isMinting ? <Loader2 size={16} className="animate-spin" /> : null}
-                Mint Lot
+                Emitir lote
               </Button>
             </div>
           </div>
@@ -108,38 +111,53 @@ export default function MintPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Mint Status</CardTitle>
-          <CardDescription>Use the deployer wallet or another address with `MINTER_ROLE`.</CardDescription>
+          <CardTitle>Status da emissão</CardTitle>
+          <CardDescription>Use a carteira de deploy ou outro endereço com `MINTER_ROLE`.</CardDescription>
         </CardHeader>
         <CardContent>
           <div style={{ display: "grid", gap: 12 }}>
+            {hasSuccess ? (
+              <div className="notice notice--success">
+                NFT emitido com sucesso. O próximo passo natural da demo é mostrar staking com AGRO.
+              </div>
+            ) : null}
+
             <div>
-              <Label>Wallet</Label>
+              <Label>Carteira</Label>
               <p className="card__description" style={{ marginTop: 6 }}>
-                {address || "Not connected"}
+                {address || "Não conectada"}
               </p>
             </div>
 
             <div>
-              <Label>Configured contracts</Label>
+              <Label>Contratos configurados</Label>
               <p className="card__description" style={{ marginTop: 6 }}>
                 {missingAddressKeys.length === 0
-                  ? "All required contract addresses are configured."
-                  : `Missing NEXT_PUBLIC values for: ${missingAddressKeys.join(", ")}`}
+                  ? "Todos os endereços necessários estão configurados."
+                  : `Valores NEXT_PUBLIC ausentes para: ${missingAddressKeys.join(", ")}`}
               </p>
             </div>
 
             <div>
-              <Label>Last transaction</Label>
+              <Label>Última transação</Label>
               <p className="card__description" style={{ marginTop: 6, overflowWrap: "anywhere" }}>
-                {txHash || "No mint submitted yet"}
+                {txHash || "Nenhuma emissão enviada ainda"}
               </p>
             </div>
 
             <div>
-              <Label>Error</Label>
+              <Label>Erro</Label>
               <p className="card__description" style={{ marginTop: 6, color: error ? "#fda4af" : undefined }}>
-                {error || "No errors"}
+                {error || "Sem erros"}
+              </p>
+            </div>
+
+            <div>
+              <Label>Próximo passo</Label>
+              <p className="card__description" style={{ marginTop: 6 }}>
+                {hasSuccess
+                  ? "Abra a página de recompensas para fazer staking de AGRO e continuar a narrativa da demo."
+                  : "Conecte uma carteira com permissão de mint, revise os campos e emita o primeiro lote."}
               </p>
             </div>
           </div>

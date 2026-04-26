@@ -23,7 +23,7 @@ const emptySnapshot: GovernanceSnapshot = {
 export default function GovernancePage() {
   const [newAprBps, setNewAprBps] = useState("150000");
   const [proposalId, setProposalId] = useState("1");
-  const [description, setDescription] = useState("Set staking APR to 150000 bps");
+  const [description, setDescription] = useState("Definir APR do staking para 150000 bps");
   const [snapshot, setSnapshot] = useState<GovernanceSnapshot>(emptySnapshot);
   const [txHash, setTxHash] = useState("");
   const [error, setError] = useState("");
@@ -35,6 +35,7 @@ export default function GovernancePage() {
   const [isExecuting, setIsExecuting] = useState(false);
 
   const missingAddressKeys = getMissingAddressKeys();
+  const hasSuccess = Boolean(txHash) && !error;
 
   async function loadSnapshot(addressOverride?: string) {
     if (missingAddressKeys.length > 0 || !hasEthereum()) {
@@ -163,9 +164,9 @@ export default function GovernancePage() {
     <div className="page-grid">
       <Card>
         <CardHeader>
-          <CardTitle>Governanca</CardTitle>
+          <CardTitle>Governança</CardTitle>
           <CardDescription>
-            Create APR proposals, vote with delegated AGRO balances, and execute successful updates.
+            Crie propostas de APR, vote com saldos AGRO delegados e execute atualizações aprovadas.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -173,39 +174,41 @@ export default function GovernancePage() {
             <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
               <Button onClick={handleConnect} variant="secondary" disabled={isConnecting || !hasEthereum()}>
                 {isConnecting ? <Loader2 size={16} className="animate-spin" /> : <Wallet size={16} />}
-                {snapshot.address ? "Wallet Connected" : "Connect Wallet"}
+                {snapshot.address ? "Carteira conectada" : "Conectar carteira"}
               </Button>
             </div>
 
             <div style={{ display: "grid", gap: 12 }}>
-              <Label htmlFor="new-apr-bps">New APR (bps)</Label>
+              <Label htmlFor="new-apr-bps">Novo APR (bps)</Label>
+              <p className="field-hint">Valor em basis points. Exemplo: `150000` representa uma APR alta para fins de demonstração.</p>
               <Input
                 id="new-apr-bps"
                 value={newAprBps}
                 onChange={(event) => {
                   const value = event.target.value;
                   setNewAprBps(value);
-                  setDescription(`Set staking APR to ${value || "0"} bps`);
+                  setDescription(`Definir APR do staking para ${value || "0"} bps`);
                 }}
                 placeholder="150000"
               />
 
-              <Label htmlFor="proposal-description">Proposal description</Label>
+              <Label htmlFor="proposal-description">Descrição da proposta</Label>
+              <p className="field-hint">Descreva a mudança com foco no efeito esperado no protocolo.</p>
               <Input
                 id="proposal-description"
                 value={description}
                 onChange={(event) => setDescription(event.target.value)}
-                placeholder="Set staking APR to 150000 bps"
+                placeholder="Definir APR do staking para 150000 bps"
               />
 
               <Button onClick={handlePropose} disabled={isProposing || missingAddressKeys.length > 0 || !newAprBps.trim()}>
                 {isProposing ? <Loader2 size={16} className="animate-spin" /> : <Vote size={16} />}
-                Create Proposal
+                Criar proposta
               </Button>
             </div>
 
             <div style={{ display: "grid", gap: 12 }}>
-              <Label htmlFor="proposal-id">Proposal ID</Label>
+              <Label htmlFor="proposal-id">ID da proposta</Label>
               <Input
                 id="proposal-id"
                 value={proposalId}
@@ -216,7 +219,7 @@ export default function GovernancePage() {
               <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
                 <Button onClick={() => void handleVote(true)} variant="outline" disabled={isVotingFor || missingAddressKeys.length > 0}>
                   {isVotingFor ? <Loader2 size={16} className="animate-spin" /> : null}
-                  Vote For
+                  Votar a favor
                 </Button>
 
                 <Button
@@ -225,12 +228,12 @@ export default function GovernancePage() {
                   disabled={isVotingAgainst || missingAddressKeys.length > 0}
                 >
                   {isVotingAgainst ? <Loader2 size={16} className="animate-spin" /> : null}
-                  Vote Against
+                  Votar contra
                 </Button>
 
                 <Button onClick={handleExecute} disabled={isExecuting || missingAddressKeys.length > 0}>
                   {isExecuting ? <Loader2 size={16} className="animate-spin" /> : null}
-                  Execute
+                  Executar
                 </Button>
               </div>
             </div>
@@ -240,24 +243,38 @@ export default function GovernancePage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Governance Status</CardTitle>
-          <CardDescription>Minimal snapshot for the connected wallet and DAO state.</CardDescription>
+          <CardTitle>Status da governança</CardTitle>
+          <CardDescription>Resumo da carteira conectada e do estado da DAO.</CardDescription>
         </CardHeader>
         <CardContent>
           <div style={{ display: "grid", gap: 12 }}>
-            <StatusRow label="Wallet" value={snapshot.address || "Not connected"} />
-            <StatusRow label="Proposal count" value={snapshot.proposalCount} />
+            {hasSuccess ? (
+              <div className="notice notice--success">
+                Ação de governança enviada. Confirme o resultado no hash e use a próxima etapa para concluir o fluxo da DAO.
+              </div>
+            ) : null}
+
+            <StatusRow label="Carteira" value={snapshot.address || "Não conectada"} />
+            <StatusRow label="Total de propostas" value={snapshot.proposalCount} />
             <StatusRow
-              label="Configured contracts"
+              label="Contratos configurados"
               value={
                 missingAddressKeys.length === 0
-                  ? "All required contract addresses are configured."
-                  : `Missing NEXT_PUBLIC values for: ${missingAddressKeys.join(", ")}`
+                  ? "Todos os endereços necessários estão configurados."
+                  : `Valores NEXT_PUBLIC ausentes para: ${missingAddressKeys.join(", ")}`
               }
             />
-            <StatusRow label="Last transaction" value={txHash || "No transaction submitted yet"} breakAll />
-            <StatusRow label="Error" value={error || "No errors"} tone={error ? "error" : "muted"} breakAll />
-            <StatusRow label="Loading" value={isLoading ? "Refreshing DAO state..." : "Idle"} />
+            <StatusRow label="Última transação" value={txHash || "Nenhuma transação enviada ainda"} breakAll />
+            <StatusRow label="Erro" value={error || "Sem erros"} tone={error ? "error" : "muted"} breakAll />
+            <StatusRow label="Carregamento" value={isLoading ? "Atualizando estado da DAO..." : "Ocioso"} />
+            <StatusRow
+              label="Próximo passo"
+              value={
+                hasSuccess
+                  ? "Se você criou a proposta, avance para votação. Se ela já passou, finalize com a execução."
+                  : "Conecte a carteira com votos delegados, crie a proposta e siga para votação e execução."
+              }
+            />
           </div>
         </CardContent>
       </Card>
@@ -269,7 +286,7 @@ function getDaoProposalTarget() {
   const target = process.env.NEXT_PUBLIC_AGRO_STAKING ?? "";
 
   if (!target) {
-    throw new Error("Missing NEXT_PUBLIC_AGRO_STAKING");
+    throw new Error("NEXT_PUBLIC_AGRO_STAKING ausente");
   }
 
   return target;

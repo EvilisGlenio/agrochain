@@ -3,19 +3,19 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#84cc16] focus-visible:ring-offset-2 focus-visible:ring-offset-[#09090b] disabled:pointer-events-none disabled:opacity-50",
+  "ui-button",
   {
     variants: {
       variant: {
-        default: "bg-[#84cc16] text-[#0a0a0a] hover:bg-[#a3e635]",
-        secondary: "bg-[#18181b] text-[#fafafa] hover:bg-[#27272a] border border-[#27272a]",
-        outline: "border border-[#27272a] bg-transparent text-[#fafafa] hover:bg-[#18181b]",
-        ghost: "bg-transparent text-[#fafafa] hover:bg-[#18181b]",
+        default: "ui-button--default",
+        secondary: "ui-button--secondary",
+        outline: "ui-button--outline",
+        ghost: "ui-button--ghost",
       },
       size: {
-        default: "h-11 px-4 py-2",
-        sm: "h-9 rounded-lg px-3",
-        lg: "h-12 rounded-xl px-6",
+        default: "ui-button--size-default",
+        sm: "ui-button--size-sm",
+        lg: "ui-button--size-lg",
       },
     },
     defaultVariants: {

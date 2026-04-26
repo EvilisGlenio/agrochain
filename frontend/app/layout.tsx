@@ -4,26 +4,26 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "AgroChain",
-  description: "AgroChain MVP dashboard for token, NFT, staking, and DAO flows.",
+  description: "Painel MVP da AgroChain para fluxos de token, NFT, staking e DAO.",
 };
 
 const navItems = [
-  { href: "/", label: "Dashboard" },
-  { href: "/mint", label: "Mint" },
-  { href: "/staking", label: "Staking" },
-  { href: "/governanca", label: "Governanca" },
+  { href: "/", label: "Painel" },
+  { href: "/mint", label: "Lotes" },
+  { href: "/staking", label: "Recompensas" },
+  { href: "/governanca", label: "Governança" },
 ];
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en">
+    <html lang="pt-BR">
       <body>
         <div className="app-shell">
           <header className="app-header">
             <div className="app-header__inner">
               <div className="brand">
                 <h1 className="brand__title">AgroChain</h1>
-                <p className="brand__subtitle">Token, NFT, staking and DAO MVP</p>
+                <p className="brand__subtitle">Token, NFT, staking e DAO</p>
               </div>
 
               <nav className="nav" aria-label="Primary">
