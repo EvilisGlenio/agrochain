@@ -37,7 +37,7 @@ Uso esperado:
 - execução dos testes automatizados
 - validação funcional do protocolo
 
-Comandos esperados:
+Comandos executados:
 
 ```bash
 npx hardhat compile
@@ -46,8 +46,11 @@ npx hardhat test
 
 Resultado:
 
-- status: `pendente de registro final`
-- observações: preencher após execução final
+- status: `executado com sucesso`
+- data: `2026-04-26`
+- resumo:
+  - `npx hardhat compile`: sem erros, sem necessidade de recompilação adicional
+  - `npx hardhat test`: 139 testes passando
 
 ### 3.2 Slither
 
@@ -56,16 +59,21 @@ Uso esperado:
 - análise estática de padrões inseguros
 - identificação de riscos comuns em Solidity
 
-Comando esperado:
+Comando executado:
 
 ```bash
-slither .
+docker run --rm -v "/home/montenegro/my-projects/agrochain":/src trailofbits/eth-security-toolbox slither /src
 ```
 
 Resultado:
 
-- status: `pendente de execução`
-- observações: preencher após execução final
+- status: `executado com sucesso via Docker`
+- data: `2026-04-26`
+- resumo:
+  - Slither analisou `51 contracts with 101 detectors`
+  - foram reportados `95 result(s)`
+  - a maior parte dos apontamentos veio de dependências OpenZeppelin e padrões genéricos do ecossistema
+  - os pontos mais relevantes para o código do projeto foram isolados na seção de achados
 
 ### 3.3 Mythril
 
@@ -74,19 +82,30 @@ Uso esperado:
 - análise simbólica dos contratos principais
 - busca por problemas lógicos ou vulnerabilidades clássicas
 
-Comandos esperados:
+Comandos executados:
 
 ```bash
-myth analyze contracts/AgroToken.sol
-myth analyze contracts/AgroLotNFT.sol
-myth analyze contracts/AgroStaking.sol
-myth analyze contracts/AgroDAO.sol
+docker run --rm mythril/myth analyze -c "$(jq -r '.deployedBytecode' artifacts/contracts/AgroToken.sol/AgroToken.json)"
+docker run --rm mythril/myth analyze -c "$(jq -r '.deployedBytecode' artifacts/contracts/AgroLotNFT.sol/AgroLotNFT.json)"
+docker run --rm mythril/myth analyze -c "$(jq -r '.deployedBytecode' artifacts/contracts/AgroStaking.sol/AgroStaking.json)"
+docker run --rm mythril/myth analyze -c "$(jq -r '.deployedBytecode' artifacts/contracts/AgroDAO.sol/AgroDAO.json)"
 ```
+
+Observação:
+
+- a tentativa inicial de analisar o código-fonte diretamente falhou por indisponibilidade de resolução DNS para `solc-bin.ethereum.org` dentro do contêiner
+- como workaround, a análise foi executada sobre o `deployedBytecode` gerado pelo Hardhat
+- isso reduz contexto semântico do source map e aumenta a chance de falsos positivos em relação à análise compilada diretamente do fonte
 
 Resultado:
 
-- status: `pendente de execução`
-- observações: preencher após execução final
+- status: `executado com workaround via bytecode`
+- data: `2026-04-26`
+- resumo:
+  - `AgroDAO`: sem issues detectadas
+  - `AgroStaking`: 1 alerta médio genérico de `assertion violation` em fallback e alertas baixos de dependência em `block.timestamp`
+  - `AgroLotNFT`: 1 alerta médio genérico de `assertion violation` em fallback
+  - `AgroToken`: 1 alerta médio genérico de `assertion violation` em fallback e alertas baixos de dependência em `block.number` e `block.timestamp` por causa das extensões de votos/permit
 
 ## 4. Controles de segurança implementados
 
@@ -227,21 +246,50 @@ Pontos de atenção:
 
 ### 6.3 Achados médios
 
-- `nenhum registrado até o momento`
+- `Mythril` reportou `SWC-110 Assertion Violation` em análises por bytecode de `AgroToken`, `AgroLotNFT` e `AgroStaking`
+- avaliação: `baixo risco prático / provável falso positivo de análise em runtime bytecode`
+- justificativa:
+  - o achado aparece associado à `fallback` de `MAIN`, sem mapeamento claro para uma função de negócio do projeto
+  - `AgroDAO` não apresentou o mesmo problema
+  - a suíte de testes está íntegra e não indicou comportamento equivalente
+  - a execução foi feita sobre bytecode, não sobre fonte compilada diretamente pelo Mythril
 
 ### 6.4 Achados baixos
 
-- `pendente de execução das ferramentas`
+- `Slither` apontou uso de `block.timestamp` em `AgroStaking`
+- avaliação: `aceito para o caso de uso`
+- justificativa:
+  - o contrato usa timestamp para cálculo temporal de recompensa e verificação de staleness do oracle
+  - não há uso de timestamp como fonte de aleatoriedade
+
+- `Slither` apontou `low-level call` em `AgroDAO.execute`
+- avaliação: `aceito e intencional`
+- justificativa:
+  - a DAO precisa executar chamadas arbitrárias dentro de uma allowlist controlada
+  - a função já usa `nonReentrant`, checagem de estado e restrição de alvos permitidos
+
+- `Slither` apontou `reentrancy-benign` e `reentrancy-events` em `AgroLotNFT.mintLot`
+- avaliação: `monitorar, mas sem evidência de exploração prática no escopo atual`
+- justificativa:
+  - o alerta decorre de `_safeMint` seguido de gravação de estado e emissão de evento
+  - o mint é restrito por papel administrativo
+  - não há fluxo econômico direto associado ao ponto indicado
+
+- `Slither` apontou que `AgroStaking.minStake` poderia ser `immutable`
+- avaliação: `melhoria de qualidade, não vulnerabilidade`
 
 ### 6.5 Informativos
 
 - a arquitetura prioriza simplicidade para fins acadêmicos
 - o uso de mocks em localhost melhora testabilidade
 - a governança é propositalmente reduzida para caber no escopo do MVP
+- parte relevante dos alertas do Slither foi emitida em contratos OpenZeppelin importados pelo projeto
+- o `solc-version` reportado pelo Slither recai principalmente sobre ranges de versão presentes nas dependências, não sobre os contratos principais da AgroChain, que usam `^0.8.28`
+- o `incorrect-exp` reportado pelo Slither aparece em `Math.sol` da OpenZeppelin e corresponde a implementação conhecida da biblioteca, não a bug da AgroChain
 
 ## 7. Resultados dos testes
 
-Status conhecido até o momento:
+Execução registrada em `2026-04-26`:
 
 - `AgroToken.ts`: 20 passing
 - `AgroLotNFT.ts`: 20 passing
@@ -253,7 +301,7 @@ Interpretação:
 
 - o projeto apresenta boa validação funcional para um MVP acadêmico
 - os fluxos principais foram exercitados localmente
-- ainda é necessário anexar a evidência da execução final no fechamento da entrega
+- a suíte atual oferece boa confiança funcional para o escopo acadêmico
 
 ## 8. Riscos residuais
 
@@ -263,16 +311,16 @@ Mesmo com os controles aplicados, permanecem riscos residuais típicos de MVP:
 - dependência de metadados externos no NFT
 - dependência de funding manual das recompensas de staking
 - dependência da disponibilidade do oracle em testnet
-- ausência, até o momento, de relatório final de ferramentas estáticas anexado
+- a análise Mythril foi feita por bytecode como workaround, o que reduz precisão dos achados
 
 ## 9. Recomendações
 
 ### Antes da entrega
 
-- rodar `hardhat compile` e `hardhat test` novamente e registrar saída resumida
-- executar `Slither` e documentar os achados
-- executar `Mythril` para os contratos principais
-- atualizar este documento com data, comandos e conclusões finais
+- revisar se `AgroLotNFT.mintLot` deve ser reordenado para gravar estado antes de `_safeMint`, caso se queira reduzir o ruído do Slither
+- decidir se `AgroStaking.minStake` deve virar `immutable` como melhoria de qualidade
+- repetir Mythril a partir do código-fonte caso o ambiente permita resolver o download do `solc`, apenas para aumentar confiança do relatório final
+- anexar no PDF final o resumo dos achados desta auditoria
 
 ### Evolução futura
 
@@ -285,4 +333,13 @@ Mesmo com os controles aplicados, permanecem riscos residuais típicos de MVP:
 
 Do ponto de vista de implementação, a AgroChain já incorpora controles relevantes para o escopo da atividade, como `AccessControl`, `ReentrancyGuard`, `SafeERC20`, `Pausable` e validações de oracle.
 
-O estado atual indica um MVP tecnicamente consistente, mas este relatório ainda precisa ser finalizado com a execução formal de `Slither` e `Mythril`, além do registro final dos comandos e achados, para atender integralmente à etapa de auditoria da tarefa.
+O estado atual indica um MVP tecnicamente consistente, e este relatório já registra a execução formal de `Hardhat`, `Slither` e `Mythril` dentro das limitações do ambiente disponível.
+
+Após a execução realizada em `2026-04-26`, o projeto demonstrou:
+
+- compilação sem erros
+- suíte completa de testes passando
+- ausência de achados críticos ou altos diretamente atribuíveis à lógica principal da AgroChain
+- alguns alertas baixos e médios que, em sua maior parte, se enquadram como uso intencional do protocolo, dependências OpenZeppelin ou falsos positivos de análise por bytecode
+
+Com isso, a AgroChain atende bem à camada de segurança esperada para um MVP acadêmico, embora ainda exista espaço para refinamentos antes da entrega final.
