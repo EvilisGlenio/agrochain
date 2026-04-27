@@ -10,6 +10,46 @@
   },
   {
     "inputs": [
+      { "internalType": "uint256", "name": "", "type": "uint256" }
+    ],
+    "name": "proposals",
+    "outputs": [
+      { "internalType": "address", "name": "proposer", "type": "address" },
+      { "internalType": "address", "name": "target", "type": "address" },
+      { "internalType": "uint256", "name": "value", "type": "uint256" },
+      { "internalType": "bytes", "name": "data", "type": "bytes" },
+      { "internalType": "bytes32", "name": "descriptionHash", "type": "bytes32" },
+      { "internalType": "uint64", "name": "snapshotBlock", "type": "uint64" },
+      { "internalType": "uint64", "name": "deadlineBlock", "type": "uint64" },
+      { "internalType": "uint256", "name": "forVotes", "type": "uint256" },
+      { "internalType": "uint256", "name": "againstVotes", "type": "uint256" },
+      { "internalType": "bool", "name": "executed", "type": "bool" }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "uint256", "name": "id", "type": "uint256" }
+    ],
+    "name": "state",
+    "outputs": [
+      { "internalType": "enum AgroDAO.ProposalState", "name": "", "type": "uint8" }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "quorumVotes",
+    "outputs": [
+      { "internalType": "uint256", "name": "", "type": "uint256" }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
       { "internalType": "address", "name": "target", "type": "address" },
       { "internalType": "uint256", "name": "value", "type": "uint256" },
       { "internalType": "bytes", "name": "data", "type": "bytes" },
@@ -39,6 +79,24 @@
     "name": "execute",
     "outputs": [],
     "stateMutability": "payable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "votingDelay",
+    "outputs": [
+      { "internalType": "uint64", "name": "", "type": "uint64" }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "votingPeriod",
+    "outputs": [
+      { "internalType": "uint64", "name": "", "type": "uint64" }
+    ],
+    "stateMutability": "view",
     "type": "function"
   }
 ]
