@@ -13,18 +13,64 @@ import { connectWallet, getBrowserProvider, getConnectedWallet, getWalletErrorMe
 type GovernanceSnapshot = {
   address: string;
   proposalCount: string;
+  currentBlock: string;
+  quorumVotes: string;
+  votingDelay: string;
+  votingPeriod: string;
+};
+
+type ProposalStateKey = "unknown" | "pending" | "active" | "defeated" | "succeeded" | "executed";
+
+type ProposalSnapshot = {
+  exists: boolean;
+  id: string;
+  proposer: string;
+  snapshotBlock: string;
+  deadlineBlock: string;
+  forVotes: string;
+  againstVotes: string;
+  state: ProposalStateKey;
+  executed: boolean;
 };
 
 const emptySnapshot: GovernanceSnapshot = {
   address: "",
   proposalCount: "0",
+  currentBlock: "0",
+  quorumVotes: "0",
+  votingDelay: "0",
+  votingPeriod: "0",
 };
+
+const emptyProposal: ProposalSnapshot = {
+  exists: false,
+  id: "0",
+  proposer: "",
+  snapshotBlock: "0",
+  deadlineBlock: "0",
+  forVotes: "0",
+  againstVotes: "0",
+  state: "unknown",
+  executed: false,
+};
+
+const proposalStateLabels: Record<ProposalStateKey, string> = {
+  unknown: "Desconhecida",
+  pending: "Pendente",
+  active: "Votação ativa",
+  defeated: "Derrotada",
+  succeeded: "Aprovada",
+  executed: "Executada",
+};
+
+const LOCAL_CHAIN_ID = "31337";
 
 export default function GovernancePage() {
   const [newAprBps, setNewAprBps] = useState("150000");
   const [proposalId, setProposalId] = useState("1");
   const [description, setDescription] = useState("Definir APR do staking para 150000 bps");
   const [snapshot, setSnapshot] = useState<GovernanceSnapshot>(emptySnapshot);
+  const [proposal, setProposal] = useState<ProposalSnapshot>(emptyProposal);
   const [txHash, setTxHash] = useState("");
   const [error, setError] = useState("");
   const [isConnecting, setIsConnecting] = useState(false);
@@ -33,9 +79,13 @@ export default function GovernancePage() {
   const [isVotingFor, setIsVotingFor] = useState(false);
   const [isVotingAgainst, setIsVotingAgainst] = useState(false);
   const [isExecuting, setIsExecuting] = useState(false);
+  const [isMining, setIsMining] = useState(false);
 
   const missingAddressKeys = getMissingAddressKeys();
   const hasSuccess = Boolean(txHash) && !error;
+  const numericProposalId = Number(proposalId);
+  const isProposalIdValid = Number.isInteger(numericProposalId) && numericProposalId > 0;
+  const isLocalNetwork = process.env.NEXT_PUBLIC_CHAIN_ID === LOCAL_CHAIN_ID;
 
   async function loadSnapshot(addressOverride?: string) {
     if (missingAddressKeys.length > 0 || !hasEthereum()) {
@@ -54,16 +104,76 @@ export default function GovernancePage() {
 
       const walletAddress = addressOverride ?? connectedWallet!.address;
       const contracts = await getReadContracts(provider);
-      const proposalCount = await contracts.dao.proposalCount();
+      const [proposalCount, quorumVotes, votingDelay, votingPeriod, currentBlock] = await Promise.all([
+        contracts.dao.proposalCount(),
+        contracts.dao.quorumVotes(),
+        contracts.dao.votingDelay(),
+        contracts.dao.votingPeriod(),
+        provider.getBlockNumber(),
+      ]);
 
       setSnapshot({
         address: walletAddress,
         proposalCount: proposalCount.toString(),
+        currentBlock: currentBlock.toString(),
+        quorumVotes: quorumVotes.toString(),
+        votingDelay: votingDelay.toString(),
+        votingPeriod: votingPeriod.toString(),
       });
+
+      if (isProposalIdValid) {
+        await loadProposal(provider, numericProposalId);
+      } else {
+        setProposal(emptyProposal);
+      }
     } catch (loadError) {
       setError(getWalletErrorMessage(loadError));
     } finally {
       setIsLoading(false);
+    }
+  }
+
+  async function loadProposal(providerOverride?: ethers.BrowserProvider, idOverride?: number) {
+    const idToLoad = idOverride ?? numericProposalId;
+
+    if (!Number.isInteger(idToLoad) || idToLoad <= 0 || missingAddressKeys.length > 0 || !hasEthereum()) {
+      setProposal(emptyProposal);
+      return;
+    }
+
+    try {
+      const provider = providerOverride ?? getBrowserProvider();
+      const contracts = await getReadContracts(provider);
+      const currentBlock = await provider.getBlockNumber();
+      const [proposalRaw, stateRaw, quorumVotes] = await Promise.all([
+        contracts.dao.proposals(BigInt(idToLoad)),
+        contracts.dao.state(BigInt(idToLoad)),
+        contracts.dao.quorumVotes(),
+      ]);
+
+      const proposer = proposalRaw.proposer as string;
+
+      if (proposer === ethers.ZeroAddress) {
+        setProposal({ ...emptyProposal, id: String(idToLoad) });
+        setSnapshot((previous) => ({ ...previous, currentBlock: currentBlock.toString(), quorumVotes: quorumVotes.toString() }));
+        return;
+      }
+
+      setProposal({
+        exists: true,
+        id: String(idToLoad),
+        proposer,
+        snapshotBlock: proposalRaw.snapshotBlock.toString(),
+        deadlineBlock: proposalRaw.deadlineBlock.toString(),
+        forVotes: proposalRaw.forVotes.toString(),
+        againstVotes: proposalRaw.againstVotes.toString(),
+        state: mapProposalState(Number(stateRaw)),
+        executed: proposalRaw.executed as boolean,
+      });
+
+      setSnapshot((previous) => ({ ...previous, currentBlock: currentBlock.toString(), quorumVotes: quorumVotes.toString() }));
+    } catch (proposalError) {
+      setError(getWalletErrorMessage(proposalError));
     }
   }
 
@@ -99,8 +209,10 @@ export default function GovernancePage() {
       const data = stakingInterface.encodeFunctionData("setApr", [BigInt(newAprBps)]);
       const tx = await dao.propose(staking, 0, data, description);
       const receipt = await tx.wait();
+      const nextProposalId = (await dao.proposalCount()).toString();
 
       setTxHash(receipt?.hash ?? tx.hash);
+      setProposalId(nextProposalId);
       setSnapshot((previous) => ({ ...previous, address: previous.address || signer.address }));
       await loadSnapshot(signer.address);
     } catch (proposalError) {
@@ -151,6 +263,21 @@ export default function GovernancePage() {
     }
   }
 
+  async function handleMineBlocks(blocks: number) {
+    setError("");
+    setIsMining(true);
+
+    try {
+      const provider = getBrowserProvider();
+      await provider.send("hardhat_mine", [ethers.toQuantity(blocks)]);
+      await loadSnapshot();
+    } catch (mineError) {
+      setError(getWalletErrorMessage(mineError));
+    } finally {
+      setIsMining(false);
+    }
+  }
+
   useEffect(() => {
     if (!hasEthereum() || missingAddressKeys.length > 0) {
       return;
@@ -159,6 +286,26 @@ export default function GovernancePage() {
     void loadSnapshot();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (!hasEthereum() || missingAddressKeys.length > 0) {
+      return;
+    }
+
+    if (!isProposalIdValid) {
+      setProposal(emptyProposal);
+      return;
+    }
+
+    void loadProposal(undefined, numericProposalId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [proposalId]);
+
+  const canVote = proposal.state === "active";
+  const canExecute = proposal.state === "succeeded";
+  const voteDisabledReason = getVoteDisabledReason(proposal);
+  const executeDisabledReason = getExecuteDisabledReason(proposal);
+  const nextStep = getNextStep(proposal, snapshot, isLocalNetwork);
 
   return (
     <div className="page-grid">
@@ -216,8 +363,50 @@ export default function GovernancePage() {
                 placeholder="1"
               />
 
+              {proposal.exists ? (
+                <div className="proposal-state-box">
+                  <div className="proposal-state-box__header">
+                    <span className={`proposal-state-badge proposal-state-badge--${proposal.state}`}>
+                      {proposalStateLabels[proposal.state]}
+                    </span>
+                    <strong>Proposta #{proposal.id}</strong>
+                  </div>
+                  <div className="proposal-state-grid">
+                    <StatusRow label="Bloco atual" value={snapshot.currentBlock} compact />
+                    <StatusRow label="Início da votação" value={proposal.snapshotBlock} compact />
+                    <StatusRow label="Fim da votação" value={proposal.deadlineBlock} compact />
+                    <StatusRow label="Quórum" value={snapshot.quorumVotes} compact />
+                    <StatusRow label="Votos a favor" value={proposal.forVotes} compact />
+                    <StatusRow label="Votos contra" value={proposal.againstVotes} compact />
+                  </div>
+                </div>
+              ) : isProposalIdValid ? (
+                <div className="notice">Nenhuma proposta encontrada para esse ID ainda.</div>
+              ) : null}
+
+              {isLocalNetwork ? (
+                <div style={{ display: "grid", gap: 10 }}>
+                  <Label>Ferramentas locais</Label>
+                  <p className="field-hint">No localhost, a DAO depende de novos blocos para liberar voto e execução.</p>
+                  <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+                    <Button onClick={() => void handleMineBlocks(1)} variant="secondary" disabled={isMining}>
+                      {isMining ? <Loader2 size={16} className="animate-spin" /> : null}
+                      Avançar 1 bloco
+                    </Button>
+                    <Button onClick={() => void handleMineBlocks(2)} variant="secondary" disabled={isMining}>
+                      {isMining ? <Loader2 size={16} className="animate-spin" /> : null}
+                      Avançar 2 blocos
+                    </Button>
+                    <Button onClick={() => void handleMineBlocks(20)} variant="secondary" disabled={isMining}>
+                      {isMining ? <Loader2 size={16} className="animate-spin" /> : null}
+                      Avançar 20 blocos
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
+
               <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-                <Button onClick={() => void handleVote(true)} variant="outline" disabled={isVotingFor || missingAddressKeys.length > 0}>
+                <Button onClick={() => void handleVote(true)} variant="outline" disabled={isVotingFor || missingAddressKeys.length > 0 || !canVote}>
                   {isVotingFor ? <Loader2 size={16} className="animate-spin" /> : null}
                   Votar a favor
                 </Button>
@@ -225,17 +414,20 @@ export default function GovernancePage() {
                 <Button
                   onClick={() => void handleVote(false)}
                   variant="outline"
-                  disabled={isVotingAgainst || missingAddressKeys.length > 0}
+                  disabled={isVotingAgainst || missingAddressKeys.length > 0 || !canVote}
                 >
                   {isVotingAgainst ? <Loader2 size={16} className="animate-spin" /> : null}
                   Votar contra
                 </Button>
 
-                <Button onClick={handleExecute} disabled={isExecuting || missingAddressKeys.length > 0}>
+                <Button onClick={handleExecute} disabled={isExecuting || missingAddressKeys.length > 0 || !canExecute}>
                   {isExecuting ? <Loader2 size={16} className="animate-spin" /> : null}
                   Executar
                 </Button>
               </div>
+
+              {voteDisabledReason ? <p className="field-hint">Voto indisponível: {voteDisabledReason}</p> : null}
+              {executeDisabledReason ? <p className="field-hint">Execução indisponível: {executeDisabledReason}</p> : null}
             </div>
           </div>
         </CardContent>
@@ -256,6 +448,7 @@ export default function GovernancePage() {
 
             <StatusRow label="Carteira" value={snapshot.address || "Não conectada"} />
             <StatusRow label="Total de propostas" value={snapshot.proposalCount} />
+            <StatusRow label="Bloco atual" value={snapshot.currentBlock} />
             <StatusRow
               label="Contratos configurados"
               value={
@@ -269,11 +462,7 @@ export default function GovernancePage() {
             <StatusRow label="Carregamento" value={isLoading ? "Atualizando estado da DAO..." : "Ocioso"} />
             <StatusRow
               label="Próximo passo"
-              value={
-                hasSuccess
-                  ? "Se você criou a proposta, avance para votação. Se ela já passou, finalize com a execução."
-                  : "Conecte a carteira com votos delegados, crie a proposta e siga para votação e execução."
-              }
+              value={nextStep}
             />
           </div>
         </CardContent>
@@ -292,19 +481,124 @@ function getDaoProposalTarget() {
   return target;
 }
 
+function mapProposalState(state: number): ProposalStateKey {
+  switch (state) {
+    case 1:
+      return "pending";
+    case 2:
+      return "active";
+    case 3:
+      return "defeated";
+    case 4:
+      return "succeeded";
+    case 5:
+      return "executed";
+    default:
+      return "unknown";
+  }
+}
+
+function getVoteDisabledReason(proposal: ProposalSnapshot) {
+  if (!proposal.exists) {
+    return "selecione uma proposta válida";
+  }
+
+  if (proposal.state === "pending") {
+    return "a proposta ainda não entrou na janela de votação";
+  }
+
+  if (proposal.state === "defeated") {
+    return "a proposta já foi derrotada";
+  }
+
+  if (proposal.state === "succeeded") {
+    return "a proposta já terminou e aguarda execução";
+  }
+
+  if (proposal.state === "executed") {
+    return "a proposta já foi executada";
+  }
+
+  if (proposal.state === "unknown") {
+    return "a proposta ainda não existe";
+  }
+
+  return "";
+}
+
+function getExecuteDisabledReason(proposal: ProposalSnapshot) {
+  if (!proposal.exists) {
+    return "selecione uma proposta válida";
+  }
+
+  if (proposal.state === "pending") {
+    return "a votação ainda não começou";
+  }
+
+  if (proposal.state === "active") {
+    return "a votação ainda está ativa";
+  }
+
+  if (proposal.state === "defeated") {
+    return "a proposta não atingiu aprovação";
+  }
+
+  if (proposal.state === "executed") {
+    return "a proposta já foi executada";
+  }
+
+  if (proposal.state === "unknown") {
+    return "a proposta ainda não existe";
+  }
+
+  return "";
+}
+
+function getNextStep(proposal: ProposalSnapshot, snapshot: GovernanceSnapshot, isLocalNetwork: boolean) {
+  if (!proposal.exists) {
+    return "Conecte a carteira com votos delegados, crie a proposta e acompanhe o estado para votar e executar no momento certo.";
+  }
+
+  if (proposal.state === "pending") {
+    return isLocalNetwork
+      ? `A proposta está pendente. Avance blocos até passar do bloco ${proposal.snapshotBlock} para liberar o voto.`
+      : `A proposta está pendente. Aguarde a rede avançar até depois do bloco ${proposal.snapshotBlock} para votar.`;
+  }
+
+  if (proposal.state === "active") {
+    return `A votação está ativa até o bloco ${proposal.deadlineBlock}. Registre seu voto agora.`;
+  }
+
+  if (proposal.state === "succeeded") {
+    return "A proposta foi aprovada e já pode ser executada.";
+  }
+
+  if (proposal.state === "defeated") {
+    return `A proposta foi derrotada com ${proposal.forVotes} votos a favor e ${proposal.againstVotes} contra.`;
+  }
+
+  if (proposal.state === "executed") {
+    return `A proposta já foi executada. O protocolo registrou a conclusão no bloco atual ${snapshot.currentBlock}.`;
+  }
+
+  return "Selecione uma proposta válida para consultar o estado da DAO.";
+}
+
 function StatusRow({
   label,
   value,
   tone = "muted",
   breakAll = false,
+  compact = false,
 }: {
   label: string;
   value: string;
   tone?: "muted" | "error";
   breakAll?: boolean;
+  compact?: boolean;
 }) {
   return (
-    <div>
+    <div className={compact ? "status-row status-row--compact" : "status-row"}>
       <Label>{label}</Label>
       <p
         className="card__description"
