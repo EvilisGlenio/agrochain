@@ -815,6 +815,254 @@ body {
   width: 100%;
 }
 
+.staking-layout {
+  display: grid;
+  gap: 24px;
+}
+
+.staking-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.staking-metrics {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.metric-card {
+  display: grid;
+  gap: 8px;
+  padding: 22px;
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.metric-card--highlight {
+  background: linear-gradient(180deg, #edf7da 0%, #f8fbef 100%);
+}
+
+.metric-card__label {
+  color: var(--muted-foreground);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.metric-card__value {
+  font-size: clamp(1.8rem, 3vw, 2.4rem);
+  line-height: 1;
+  letter-spacing: -0.04em;
+}
+
+.metric-card__caption {
+  margin: 0;
+  color: var(--muted-foreground);
+}
+
+.staking-grid {
+  display: grid;
+  gap: 24px;
+  grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
+}
+
+.staking-main,
+.staking-side {
+  display: grid;
+  gap: 18px;
+}
+
+.staking-panel {
+  min-height: 100%;
+}
+
+.stake-input-row {
+  position: relative;
+}
+
+.stake-input-row__suffix {
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--muted-foreground);
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+.stake-input-row .ui-input {
+  padding-right: 72px;
+}
+
+.hint-pill--button {
+  border: 0;
+}
+
+.stake-slider {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+.slider-labels {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--muted-foreground);
+  font-size: 0.8125rem;
+}
+
+.stake-estimate-box {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+  border-radius: 20px;
+  background: #f5f7f4;
+}
+
+.estimate-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.estimate-row span {
+  color: var(--muted-foreground);
+}
+
+.staking-actions {
+  display: grid;
+  gap: 12px;
+}
+
+.reward-highlight {
+  display: grid;
+  gap: 8px;
+  padding: 20px;
+  border-radius: 22px;
+  background: linear-gradient(180deg, #eef7df 0%, #f8fbef 100%);
+}
+
+.reward-highlight__value {
+  font-size: clamp(2rem, 4vw, 3rem);
+  line-height: 1;
+  letter-spacing: -0.05em;
+}
+
+.reward-highlight__unit {
+  margin-left: 10px;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--accent-link);
+}
+
+.dual-cta-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.dual-cta-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 56px;
+  padding: 14px 22px;
+  border: 1px solid var(--border);
+  border-radius: 56px;
+  background: #ffffff;
+  font-weight: 700;
+}
+
+.dual-cta-link:hover {
+  border-color: var(--accent);
+  color: var(--accent-link);
+}
+
+.position-progress {
+  display: grid;
+  gap: 10px;
+}
+
+.position-progress__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.position-progress__head span {
+  color: var(--muted-foreground);
+}
+
+.position-progress__bar {
+  height: 8px;
+  border-radius: 999px;
+  background: #edf1eb;
+  overflow: hidden;
+}
+
+.position-progress__bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #76b85f 0%, #2f8f1f 100%);
+}
+
+.status-tag {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: #eef1eb;
+  color: var(--muted-foreground);
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+
+.status-tag--success {
+  background: #f6ebc9;
+  color: #8a6510;
+}
+
+.how-it-works-list {
+  display: grid;
+  gap: 14px;
+}
+
+.how-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.how-step__index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: #eef7df;
+  color: var(--accent-link);
+  font-size: 0.875rem;
+  font-weight: 700;
+  flex: 0 0 auto;
+}
+
+.how-step p {
+  margin: 2px 0 0;
+  color: var(--muted-foreground);
+  line-height: 1.5;
+}
+
 .grid {
   display: grid;
   gap: 16px;
@@ -1058,6 +1306,17 @@ body {
 
   .mint-layout {
     grid-template-columns: 1fr;
+  }
+
+  .staking-header,
+  .staking-metrics,
+  .staking-grid,
+  .dual-cta-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .staking-header {
+    flex-direction: column;
   }
 
   .mint-sidebar {
