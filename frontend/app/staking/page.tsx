@@ -40,6 +40,8 @@ export default function StakingPage() {
 
   const missingAddressKeys = getMissingAddressKeys();
   const hasSuccess = Boolean(txHash) && !error;
+  const claimableRewards = Number(snapshot.earned);
+  const canClaim = Number.isFinite(claimableRewards) && claimableRewards > 0;
 
   async function loadSnapshot(addressOverride?: string) {
     if (missingAddressKeys.length > 0 || !hasEthereum()) {
@@ -201,11 +203,17 @@ export default function StakingPage() {
                 Aprovar + fazer staking
               </Button>
 
-              <Button onClick={handleClaim} variant="outline" disabled={isClaiming || missingAddressKeys.length > 0}>
+              <Button onClick={handleClaim} variant="outline" disabled={isClaiming || missingAddressKeys.length > 0 || !canClaim}>
                 {isClaiming ? <Loader2 size={16} className="animate-spin" /> : null}
                 Resgatar
               </Button>
             </div>
+
+            {!canClaim ? (
+              <p className="field-hint">
+                O resgate só é liberado quando houver recompensa acumulada. Depois de um stake recente, aguarde pelo menos um novo bloco.
+              </p>
+            ) : null}
           </div>
         </CardContent>
       </Card>
@@ -245,7 +253,9 @@ export default function StakingPage() {
               value={
                 hasSuccess
                   ? "Se os votos já estiverem delegados, abra a governança para criar ou votar em uma proposta."
-                  : "Conecte a carteira, aprove AGRO e execute o staking para mostrar recompensas e posição on-chain."
+                  : canClaim
+                    ? "Já existe recompensa disponível. Você pode resgatar ou seguir para a governança se os votos já estiverem delegados."
+                    : "Conecte a carteira, aprove AGRO e execute o staking. Após um stake recente, aguarde a recompensa acumular antes de resgatar."
               }
             />
           </div>
