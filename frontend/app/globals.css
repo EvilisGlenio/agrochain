@@ -514,20 +514,13 @@ body {
 }
 
 .mint-layout {
-  align-items: start;
+  display: grid;
   gap: 24px;
-  grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.85fr);
 }
 
-.mint-main,
-.mint-sidebar {
+.mint-main {
   display: grid;
   gap: 22px;
-}
-
-.mint-sidebar {
-  position: sticky;
-  top: 96px;
 }
 
 .mint-header {
@@ -599,6 +592,10 @@ body {
 
 .mint-card--preview {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(247, 250, 244, 0.96));
+}
+
+.mint-card--status {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(248, 250, 246, 0.95));
 }
 
 .chip-group {
@@ -1304,10 +1301,6 @@ body {
     grid-template-columns: 1fr;
   }
 
-  .mint-layout {
-    grid-template-columns: 1fr;
-  }
-
   .staking-header,
   .staking-metrics,
   .staking-grid,
@@ -1317,10 +1310,6 @@ body {
 
   .staking-header {
     flex-direction: column;
-  }
-
-  .mint-sidebar {
-    position: static;
   }
 
   .preview-row {

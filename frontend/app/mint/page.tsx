@@ -107,7 +107,7 @@ export default function MintPage() {
   }
 
   return (
-    <div className="page-grid mint-layout">
+    <div className="mint-layout">
       <div className="mint-main">
         <section className="mint-header">
           <p className="mint-breadcrumb">AgroChain <span>›</span> Lotes <span>›</span> Emitir NFT</p>
@@ -199,6 +199,79 @@ export default function MintPage() {
             </CardContent>
           </Card>
 
+          <Card className="mint-card mint-card--status">
+            <CardHeader>
+              <CardTitle>Status da emissão</CardTitle>
+              <CardDescription>O painel reflete o que já está pronto e o que ainda falta revisar antes do mint.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="status-checklist">
+                {statusItems.map((item) => (
+                  <div key={item.title} className="status-checklist__item">
+                    <span className={`status-dot status-dot--${item.tone}`} />
+                    <div>
+                      <strong>{item.title}</strong>
+                      <p className="card__description">{item.detail}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {hasSuccess ? (
+                <div className="notice notice--success">
+                  NFT emitido com sucesso. O proximo passo natural da demo e mostrar staking com AGRO.
+                </div>
+              ) : null}
+
+              <div className="gas-box">
+                <strong>Taxa estimada de gas</strong>
+                <p className="card__description">~0.001 ETH em testnet. Gratuito em Sepolia com faucet.</p>
+              </div>
+
+              <div className="mint-actions">
+                <Button onClick={handleConnect} variant="secondary" disabled={isConnecting || !hasEthereum()}>
+                  {isConnecting ? <Loader2 size={16} className="animate-spin" /> : <Wallet size={16} />}
+                  {address ? "Carteira conectada" : "Conectar carteira"}
+                </Button>
+
+                <Button
+                  onClick={handleMint}
+                  disabled={isMinting || !isMintReady}
+                  size="lg"
+                >
+                  {isMinting ? <Loader2 size={16} className="animate-spin" /> : <ShieldCheck size={16} />}
+                  Prosseguir para emissão
+                </Button>
+
+                <p className="field-hint">Você revisará os dados no próprio preview antes de confirmar a assinatura no MetaMask.</p>
+              </div>
+
+              <div style={{ display: "grid", gap: 12 }}>
+                <StatusRow label="Carteira" value={address || "Não conectada"} />
+                <StatusRow
+                  label="Contratos configurados"
+                  value={
+                    missingAddressKeys.length === 0
+                      ? "Todos os endereços necessários estão configurados."
+                      : `Valores NEXT_PUBLIC ausentes para: ${missingAddressKeys.join(", ")}`
+                  }
+                />
+                <StatusRow label="Última transação" value={txHash || "Nenhuma emissão enviada ainda"} breakAll />
+                <StatusRow label="Erro" value={error || "Sem erros"} tone={error ? "error" : "muted"} breakAll />
+                <StatusRow
+                  label="Próximo passo"
+                  value={
+                    hasSuccess
+                      ? "Abra a página de recompensas para fazer staking de AGRO e continuar a narrativa da demo."
+                      : isMintReady
+                        ? "Tudo pronto para emitir. Revise o preview e confirme a assinatura na carteira."
+                        : "Conecte uma carteira com permissão de mint, complete os detalhes do lote e revise a URI antes de emitir."
+                  }
+                />
+              </div>
+            </CardContent>
+          </Card>
+
           {/* <Card className="mint-card mint-card--wide">
             <CardHeader>
               <CardTitle>URI dos metadados</CardTitle>
@@ -276,81 +349,6 @@ export default function MintPage() {
             </CardContent>
           </Card>
         </div>
-      </div>
-
-      <div className="mint-sidebar">
-        <Card>
-          <CardHeader>
-            <CardTitle>Status da emissão</CardTitle>
-            <CardDescription>O painel reflete o que já está pronto e o que ainda falta revisar antes do mint.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="status-checklist">
-              {statusItems.map((item) => (
-                <div key={item.title} className="status-checklist__item">
-                  <span className={`status-dot status-dot--${item.tone}`} />
-                  <div>
-                    <strong>{item.title}</strong>
-                    <p className="card__description">{item.detail}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {hasSuccess ? (
-              <div className="notice notice--success">
-                NFT emitido com sucesso. O proximo passo natural da demo e mostrar staking com AGRO.
-              </div>
-            ) : null}
-
-            <div className="gas-box">
-              <strong>Taxa estimada de gas</strong>
-              <p className="card__description">~0.001 ETH em testnet. Gratuito em Sepolia com faucet.</p>
-            </div>
-
-            <div className="mint-actions">
-              <Button onClick={handleConnect} variant="secondary" disabled={isConnecting || !hasEthereum()}>
-                {isConnecting ? <Loader2 size={16} className="animate-spin" /> : <Wallet size={16} />}
-                {address ? "Carteira conectada" : "Conectar carteira"}
-              </Button>
-
-              <Button
-                onClick={handleMint}
-                disabled={isMinting || !isMintReady}
-                size="lg"
-              >
-                {isMinting ? <Loader2 size={16} className="animate-spin" /> : <ShieldCheck size={16} />}
-                Prosseguir para emissão
-              </Button>
-
-              <p className="field-hint">Voce revisara os dados no proprio preview antes de confirmar a assinatura no MetaMask.</p>
-            </div>
-
-            <div style={{ display: "grid", gap: 12 }}>
-              <StatusRow label="Carteira" value={address || "Não conectada"} />
-              <StatusRow
-                label="Contratos configurados"
-                value={
-                  missingAddressKeys.length === 0
-                    ? "Todos os enderecos necessarios estao configurados."
-                    : `Valores NEXT_PUBLIC ausentes para: ${missingAddressKeys.join(", ")}`
-                }
-              />
-              <StatusRow label="Última transação" value={txHash || "Nenhuma emissão enviada ainda"} breakAll />
-              <StatusRow label="Erro" value={error || "Sem erros"} tone={error ? "error" : "muted"} breakAll />
-              <StatusRow
-                label="Proximo passo"
-                value={
-                  hasSuccess
-                    ? "Abra a pagina de recompensas para fazer staking de AGRO e continuar a narrativa da demo."
-                    : isMintReady
-                      ? "Tudo pronto para emitir. Revise o preview e confirme a assinatura na carteira."
-                      : "Conecte uma carteira com permissao de mint, complete os detalhes do lote e revise a URI antes de emitir."
-                }
-              />
-            </div>
-          </CardContent>
-        </Card>
       </div>
     </div>
   );
