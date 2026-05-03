@@ -64,8 +64,8 @@ export default function MintPage() {
     },
     {
       tone: hasSuccess ? "success" : isMinting ? "warning" : "pending",
-      title: "Transacao",
-      detail: hasSuccess ? "NFT emitido com sucesso em Sepolia." : isMinting ? "Confirmacao pendente na carteira e na rede." : "Nenhuma transacao enviada ainda.",
+      title: "Transação",
+      detail: hasSuccess ? "NFT emitido com sucesso em Sepolia." : isMinting ? "Confirmação pendente na carteira e na rede." : "Nenhuma transação enviada ainda.",
     },
   ] as const;
 
@@ -114,11 +114,11 @@ export default function MintPage() {
           <div className="mint-header__row">
             <div>
               <h1 className="mint-title">Emitir NFT de lote</h1>
-              <p className="mint-subtitle">Registre um lote agricola como NFT na rede Sepolia com metadados ricos e revisao visual antes do mint.</p>
+              <p className="mint-subtitle">Registre um lote agrícola como NFT na rede Sepolia com metadados ricos e revisão visual antes do mint.</p>
             </div>
             <div className="mint-wallet-pill">
               <Wallet size={16} />
-              {address ? `${address.slice(0, 6)}...${address.slice(-4)}` : "Carteira nao conectada"}
+              {address ? `${address.slice(0, 6)}...${address.slice(-4)}` : "Carteira não conectada"}
             </div>
           </div>
         </section>
@@ -127,7 +127,7 @@ export default function MintPage() {
           <Card className="mint-card mint-card--wide">
             <CardHeader>
               <CardTitle>Tipo do produto</CardTitle>
-              <CardDescription>Selecione a categoria principal do lote para manter consistencia nos metadados on-chain.</CardDescription>
+              <CardDescription>Selecione a categoria principal do lote para manter consistência nos metadados on-chain.</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="chip-group">
@@ -157,7 +157,7 @@ export default function MintPage() {
               ) : null}
 
               <div className="field-stack">
-                <Label htmlFor="product-description">Descricao do produto</Label>
+                <Label htmlFor="product-description">Descrição do produto</Label>
                 <p className="field-hint">Adicione variedade, safra ou detalhe comercial do lote.</p>
                 <Input
                   id="product-description"
@@ -172,7 +172,7 @@ export default function MintPage() {
           <Card className="mint-card mint-card--preview">
             <CardHeader>
               <CardTitle>Preview do NFT</CardTitle>
-              <CardDescription>Veja como o lote sera apresentado antes de assinar a transacao.</CardDescription>
+              <CardDescription>Veja como o lote será apresentado antes de assinar a transação.</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="nft-preview">
@@ -181,25 +181,25 @@ export default function MintPage() {
                 </div>
                 <div className="nft-preview__content">
                   <strong>Lote {resolvedProductType || "Produto"} #{hasSuccess ? "emitido" : "--"}</strong>
-                  <p className="card__description">Token ID sera gerado no mint</p>
+                  <p className="card__description">Token ID será gerado no mint</p>
                 </div>
               </div>
 
               <div className="preview-meta">
-                <PreviewRow label="Produto" value={resolvedProductType || "Nao definido"} />
+                <PreviewRow label="Produto" value={resolvedProductType || "Não definido"} />
                 <PreviewRow label="Rede" value="Sepolia Testnet" />
                 <PreviewRow label="Minter" value={address || "A conectar"} breakAll />
                 <PreviewRow label="URI" value={tokenUri || "A preencher"} tone={isUriValid ? "success" : "muted"} breakAll />
                 <PreviewRow label="Peso" value={estimatedWeight ? `${estimatedWeight} kg` : "A definir"} />
                 <PreviewRow label="Colheita" value={harvestDate || "A definir"} />
-                <PreviewRow label="Certificacao" value={certification || "Nao informada"} />
+                <PreviewRow label="Certificação" value={certification || "Não informada"} />
               </div>
 
-              <p className="field-hint">Preencha os campos para enriquecer os metadados e revisar tudo antes da confirmacao.</p>
+              <p className="field-hint">Preencha os campos para enriquecer os metadados e revisar tudo antes da confirmação.</p>
             </CardContent>
           </Card>
 
-          <Card className="mint-card mint-card--wide">
+          {/* <Card className="mint-card mint-card--wide">
             <CardHeader>
               <CardTitle>URI dos metadados</CardTitle>
               <CardDescription>Use um link IPFS ou JSON publico com os atributos do lote.</CardDescription>
@@ -226,7 +226,7 @@ export default function MintPage() {
                 <p className="card__description">`name`, `origin`, `weight_kg`, `harvest_date`, `producer_code`, `certification`</p>
               </div>
             </CardContent>
-          </Card>
+          </Card> */}
 
           <Card className="mint-card mint-card--wide">
             <CardHeader>
@@ -264,7 +264,7 @@ export default function MintPage() {
                 </div>
 
                 <div className="field-stack">
-                  <Label htmlFor="certification">Certificacao</Label>
+                  <Label htmlFor="certification">Certificação</Label>
                   <Input
                     id="certification"
                     value={certification}
@@ -281,8 +281,8 @@ export default function MintPage() {
       <div className="mint-sidebar">
         <Card>
           <CardHeader>
-            <CardTitle>Status da emissao</CardTitle>
-            <CardDescription>O painel reflete o que ja esta pronto e o que ainda falta revisar antes do mint.</CardDescription>
+            <CardTitle>Status da emissão</CardTitle>
+            <CardDescription>O painel reflete o que já está pronto e o que ainda falta revisar antes do mint.</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="status-checklist">
@@ -320,14 +320,14 @@ export default function MintPage() {
                 size="lg"
               >
                 {isMinting ? <Loader2 size={16} className="animate-spin" /> : <ShieldCheck size={16} />}
-                Prosseguir para emissao
+                Prosseguir para emissão
               </Button>
 
               <p className="field-hint">Voce revisara os dados no proprio preview antes de confirmar a assinatura no MetaMask.</p>
             </div>
 
             <div style={{ display: "grid", gap: 12 }}>
-              <StatusRow label="Carteira" value={address || "Nao conectada"} />
+              <StatusRow label="Carteira" value={address || "Não conectada"} />
               <StatusRow
                 label="Contratos configurados"
                 value={
@@ -336,7 +336,7 @@ export default function MintPage() {
                     : `Valores NEXT_PUBLIC ausentes para: ${missingAddressKeys.join(", ")}`
                 }
               />
-              <StatusRow label="Ultima transacao" value={txHash || "Nenhuma emissao enviada ainda"} breakAll />
+              <StatusRow label="Última transação" value={txHash || "Nenhuma emissão enviada ainda"} breakAll />
               <StatusRow label="Erro" value={error || "Sem erros"} tone={error ? "error" : "muted"} breakAll />
               <StatusRow
                 label="Proximo passo"
