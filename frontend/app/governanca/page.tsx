@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 import { ethers } from "ethers";
 import { Loader2, Vote, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -10,67 +11,59 @@ import { Label } from "@/components/ui/label";
 import { getMissingAddressKeys, getReadContracts, getWriteContracts } from "@/lib/contracts";
 import { connectWallet, getBrowserProvider, getConnectedWallet, getWalletErrorMessage, hasEthereum } from "@/lib/web3";
 
-type GovernanceSnapshot = {
-  address: string;
-  proposalCount: string;
-  currentBlock: string;
-  quorumVotes: string;
-  votingDelay: string;
-  votingPeriod: string;
-};
-
 type ProposalStateKey = "unknown" | "pending" | "active" | "defeated" | "succeeded" | "executed";
 
-type ProposalSnapshot = {
-  exists: boolean;
-  id: string;
-  proposer: string;
-  snapshotBlock: string;
-  deadlineBlock: string;
-  forVotes: string;
-  againstVotes: string;
+type GovernanceSnapshot = {
+  address: string;
+  proposalCount: number;
+  currentBlock: number;
+  quorumVotes: number;
+  proposalThreshold: number;
+  votingPower: number;
+  currentAprBps: number;
+};
+
+type ProposalCardData = {
+  id: number;
+  title: string;
+  description: string;
   state: ProposalStateKey;
+  snapshotBlock: number;
+  deadlineBlock: number;
+  forVotes: number;
+  againstVotes: number;
+  hasVoted: boolean;
   executed: boolean;
+  quorumReached: boolean;
 };
 
 const emptySnapshot: GovernanceSnapshot = {
   address: "",
-  proposalCount: "0",
-  currentBlock: "0",
-  quorumVotes: "0",
-  votingDelay: "0",
-  votingPeriod: "0",
+  proposalCount: 0,
+  currentBlock: 0,
+  quorumVotes: 0,
+  proposalThreshold: 0,
+  votingPower: 0,
+  currentAprBps: 0,
 };
 
-const emptyProposal: ProposalSnapshot = {
-  exists: false,
-  id: "0",
-  proposer: "",
-  snapshotBlock: "0",
-  deadlineBlock: "0",
-  forVotes: "0",
-  againstVotes: "0",
-  state: "unknown",
-  executed: false,
-};
+const LOCAL_CHAIN_ID = "31337";
 
-const proposalStateLabels: Record<ProposalStateKey, string> = {
+const stateLabels: Record<ProposalStateKey, string> = {
   unknown: "Desconhecida",
   pending: "Pendente",
-  active: "Votação ativa",
+  active: "Em votação",
   defeated: "Derrotada",
   succeeded: "Aprovada",
   executed: "Executada",
 };
 
-const LOCAL_CHAIN_ID = "31337";
-
 export default function GovernancePage() {
-  const [newAprBps, setNewAprBps] = useState("150000");
-  const [proposalId, setProposalId] = useState("1");
-  const [description, setDescription] = useState("Definir APR do staking para 150000 bps");
+  const [aprPercentInput, setAprPercentInput] = useState("15");
+  const [description, setDescription] = useState("Definir APR do staking para 15%");
+  const [selectedProposalId, setSelectedProposalId] = useState<number | null>(null);
   const [snapshot, setSnapshot] = useState<GovernanceSnapshot>(emptySnapshot);
-  const [proposal, setProposal] = useState<ProposalSnapshot>(emptyProposal);
+  const [proposals, setProposals] = useState<ProposalCardData[]>([]);
   const [txHash, setTxHash] = useState("");
   const [error, setError] = useState("");
   const [isConnecting, setIsConnecting] = useState(false);
@@ -82,10 +75,46 @@ export default function GovernancePage() {
   const [isMining, setIsMining] = useState(false);
 
   const missingAddressKeys = getMissingAddressKeys();
-  const hasSuccess = Boolean(txHash) && !error;
-  const numericProposalId = Number(proposalId);
-  const isProposalIdValid = Number.isInteger(numericProposalId) && numericProposalId > 0;
   const isLocalNetwork = process.env.NEXT_PUBLIC_CHAIN_ID === LOCAL_CHAIN_ID;
+  const selectedProposal = proposals.find((item) => item.id === selectedProposalId) ?? null;
+  const aprBpsValue = Math.round(Number(aprPercentInput || "0") * 10_000);
+  const canCreateProposal = snapshot.votingPower >= snapshot.proposalThreshold && aprBpsValue > 0;
+  const canVote = selectedProposal?.state === "active" && !selectedProposal.hasVoted;
+  const canExecute = selectedProposal?.state === "succeeded";
+
+  const metrics = useMemo(() => {
+    return [
+      { label: "Total de propostas", value: snapshot.proposalCount.toString(), caption: "na DAO" },
+      { label: "Bloco atual", value: formatCompact(snapshot.currentBlock), caption: "Sepolia" },
+      { label: "Seu poder de voto", value: formatToken(snapshot.votingPower), caption: "AGRO delegados", highlight: true },
+      { label: "APR em vigor", value: formatApr(snapshot.currentAprBps), caption: snapshot.currentAprBps ? `${formatCompact(snapshot.currentAprBps)} bps` : "sem leitura" },
+    ];
+  }, [snapshot]);
+
+  const statusItems = useMemo(() => {
+    return [
+      {
+        tone: missingAddressKeys.length === 0 ? "success" : "pending",
+        title: "Contratos prontos",
+        detail: missingAddressKeys.length === 0 ? "Todos os enderecos estao configurados." : `Faltam enderecos: ${missingAddressKeys.join(", ")}`,
+      },
+      {
+        tone: snapshot.address ? "success" : "pending",
+        title: "Carteira conectada",
+        detail: snapshot.address || "Conecte a carteira para interagir com a DAO.",
+      },
+      {
+        tone: selectedProposal?.state === "active" ? "warning" : selectedProposal?.state === "executed" ? "success" : "pending",
+        title: selectedProposal ? `Proposta #${selectedProposal.id}` : "Nenhuma proposta selecionada",
+        detail: selectedProposal ? getProposalStatusMessage(selectedProposal) : "Selecione uma proposta para acompanhar o ciclo de governanca.",
+      },
+      {
+        tone: txHash ? "success" : "pending",
+        title: "Ultima transacao",
+        detail: txHash || "Nenhuma tx recente.",
+      },
+    ] as const;
+  }, [missingAddressKeys, snapshot.address, selectedProposal, txHash]);
 
   async function loadSnapshot(addressOverride?: string) {
     if (missingAddressKeys.length > 0 || !hasEthereum()) {
@@ -104,28 +133,31 @@ export default function GovernancePage() {
 
       const walletAddress = addressOverride ?? connectedWallet!.address;
       const contracts = await getReadContracts(provider);
-      const [proposalCount, quorumVotes, votingDelay, votingPeriod, currentBlock] = await Promise.all([
+
+      const [proposalCount, quorumVotes, proposalThreshold, currentBlock, votingPower, currentAprBps] = await Promise.all([
         contracts.dao.proposalCount(),
         contracts.dao.quorumVotes(),
-        contracts.dao.votingDelay(),
-        contracts.dao.votingPeriod(),
+        contracts.dao.proposalThreshold(),
         provider.getBlockNumber(),
+        contracts.token.getVotes(walletAddress),
+        contracts.staking.currentAprBps().catch(() => BigInt(0)),
       ]);
 
-      setSnapshot({
+      const nextSnapshot = {
         address: walletAddress,
-        proposalCount: proposalCount.toString(),
-        currentBlock: currentBlock.toString(),
-        quorumVotes: quorumVotes.toString(),
-        votingDelay: votingDelay.toString(),
-        votingPeriod: votingPeriod.toString(),
-      });
+        proposalCount: Number(proposalCount),
+        currentBlock,
+        quorumVotes: Number(ethers.formatUnits(quorumVotes, 18)),
+        proposalThreshold: Number(ethers.formatUnits(proposalThreshold, 18)),
+        votingPower: Number(ethers.formatUnits(votingPower, 18)),
+        currentAprBps: Number(currentAprBps),
+      };
 
-      if (isProposalIdValid) {
-        await loadProposal(provider, numericProposalId);
-      } else {
-        setProposal(emptyProposal);
-      }
+      setSnapshot(nextSnapshot);
+
+      const proposalsLoaded = await loadProposalCards(provider, Number(proposalCount), walletAddress, nextSnapshot.quorumVotes);
+      setProposals(proposalsLoaded);
+      setSelectedProposalId((current) => current ?? proposalsLoaded[0]?.id ?? null);
     } catch (loadError) {
       setError(getWalletErrorMessage(loadError));
     } finally {
@@ -133,48 +165,56 @@ export default function GovernancePage() {
     }
   }
 
-  async function loadProposal(providerOverride?: ethers.BrowserProvider, idOverride?: number) {
-    const idToLoad = idOverride ?? numericProposalId;
+  async function loadProposalCards(provider: ethers.BrowserProvider, proposalCount: number, walletAddress: string, quorumVotes: number) {
+    const contracts = await getReadContracts(provider);
+    const stakingInterface = new ethers.Interface(["function setApr(uint256 newAprBps)"]);
 
-    if (!Number.isInteger(idToLoad) || idToLoad <= 0 || missingAddressKeys.length > 0 || !hasEthereum()) {
-      setProposal(emptyProposal);
-      return;
-    }
+    const loaded = await Promise.all(
+      Array.from({ length: proposalCount }, async (_, index) => {
+        const id = proposalCount - index;
+        const [proposalRaw, stateRaw, hasVoted] = await Promise.all([
+          contracts.dao.proposals(BigInt(id)),
+          contracts.dao.state(BigInt(id)),
+          contracts.dao.hasVoted(BigInt(id), walletAddress),
+        ]);
 
-    try {
-      const provider = providerOverride ?? getBrowserProvider();
-      const contracts = await getReadContracts(provider);
-      const currentBlock = await provider.getBlockNumber();
-      const [proposalRaw, stateRaw, quorumVotes] = await Promise.all([
-        contracts.dao.proposals(BigInt(idToLoad)),
-        contracts.dao.state(BigInt(idToLoad)),
-        contracts.dao.quorumVotes(),
-      ]);
+        let title = `Proposta #${id}`;
+        let descriptionText = `Acompanhamento do ciclo da proposta ${id}.`;
 
-      const proposer = proposalRaw.proposer as string;
+        try {
+          const decoded = stakingInterface.decodeFunctionData("setApr", proposalRaw.data as string);
+          const aprBps = Number(decoded[0]);
+          const aprPercent = aprBps / 10_000;
+          title = `Definir APR do staking para ${formatCompact(aprPercent)}%`;
+          descriptionText = proposalRaw.executed
+            ? `Aprovada e executada no protocolo.`
+            : mapProposalState(Number(stateRaw)) === "active"
+              ? `Encerramento no bloco ${proposalRaw.deadlineBlock.toString()}`
+              : `Ciclo registrado entre os blocos ${proposalRaw.snapshotBlock.toString()} e ${proposalRaw.deadlineBlock.toString()}`;
+        } catch {
+          title = `Proposta #${id}`;
+        }
 
-      if (proposer === ethers.ZeroAddress) {
-        setProposal({ ...emptyProposal, id: String(idToLoad) });
-        setSnapshot((previous) => ({ ...previous, currentBlock: currentBlock.toString(), quorumVotes: quorumVotes.toString() }));
-        return;
-      }
+        const forVotes = Number(ethers.formatUnits(proposalRaw.forVotes, 18));
+        const againstVotes = Number(ethers.formatUnits(proposalRaw.againstVotes, 18));
 
-      setProposal({
-        exists: true,
-        id: String(idToLoad),
-        proposer,
-        snapshotBlock: proposalRaw.snapshotBlock.toString(),
-        deadlineBlock: proposalRaw.deadlineBlock.toString(),
-        forVotes: proposalRaw.forVotes.toString(),
-        againstVotes: proposalRaw.againstVotes.toString(),
-        state: mapProposalState(Number(stateRaw)),
-        executed: proposalRaw.executed as boolean,
-      });
+        return {
+          id,
+          title,
+          description: descriptionText,
+          state: mapProposalState(Number(stateRaw)),
+          snapshotBlock: Number(proposalRaw.snapshotBlock),
+          deadlineBlock: Number(proposalRaw.deadlineBlock),
+          forVotes,
+          againstVotes,
+          hasVoted,
+          executed: proposalRaw.executed as boolean,
+          quorumReached: forVotes >= quorumVotes,
+        } satisfies ProposalCardData;
+      })
+    );
 
-      setSnapshot((previous) => ({ ...previous, currentBlock: currentBlock.toString(), quorumVotes: quorumVotes.toString() }));
-    } catch (proposalError) {
-      setError(getWalletErrorMessage(proposalError));
-    }
+    return loaded;
   }
 
   async function handleConnect() {
@@ -201,19 +241,12 @@ export default function GovernancePage() {
       const provider = getBrowserProvider();
       const { dao, signer } = await getWriteContracts(provider);
       const staking = getDaoProposalTarget();
-
-      const stakingInterface = new ethers.Interface([
-        "function setApr(uint256 newAprBps)",
-      ]);
-
-      const data = stakingInterface.encodeFunctionData("setApr", [BigInt(newAprBps)]);
+      const stakingInterface = new ethers.Interface(["function setApr(uint256 newAprBps)"]);
+      const data = stakingInterface.encodeFunctionData("setApr", [BigInt(aprBpsValue)]);
       const tx = await dao.propose(staking, 0, data, description);
       const receipt = await tx.wait();
-      const nextProposalId = (await dao.proposalCount()).toString();
 
       setTxHash(receipt?.hash ?? tx.hash);
-      setProposalId(nextProposalId);
-      setSnapshot((previous) => ({ ...previous, address: previous.address || signer.address }));
       await loadSnapshot(signer.address);
     } catch (proposalError) {
       setError(getWalletErrorMessage(proposalError));
@@ -223,6 +256,10 @@ export default function GovernancePage() {
   }
 
   async function handleVote(support: boolean) {
+    if (!selectedProposal) {
+      return;
+    }
+
     setError("");
     setTxHash("");
     support ? setIsVotingFor(true) : setIsVotingAgainst(true);
@@ -230,7 +267,7 @@ export default function GovernancePage() {
     try {
       const provider = getBrowserProvider();
       const { dao, signer } = await getWriteContracts(provider);
-      const tx = await dao.vote(BigInt(proposalId), support);
+      const tx = await dao.vote(BigInt(selectedProposal.id), support);
       const receipt = await tx.wait();
 
       setTxHash(receipt?.hash ?? tx.hash);
@@ -244,6 +281,10 @@ export default function GovernancePage() {
   }
 
   async function handleExecute() {
+    if (!selectedProposal) {
+      return;
+    }
+
     setError("");
     setTxHash("");
     setIsExecuting(true);
@@ -251,7 +292,7 @@ export default function GovernancePage() {
     try {
       const provider = getBrowserProvider();
       const { dao, signer } = await getWriteContracts(provider);
-      const tx = await dao.execute(BigInt(proposalId), { value: 0 });
+      const tx = await dao.execute(BigInt(selectedProposal.id), { value: 0 });
       const receipt = await tx.wait();
 
       setTxHash(receipt?.hash ?? tx.hash);
@@ -287,186 +328,241 @@ export default function GovernancePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => {
-    if (!hasEthereum() || missingAddressKeys.length > 0) {
-      return;
-    }
-
-    if (!isProposalIdValid) {
-      setProposal(emptyProposal);
-      return;
-    }
-
-    void loadProposal(undefined, numericProposalId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [proposalId]);
-
-  const canVote = proposal.state === "active";
-  const canExecute = proposal.state === "succeeded";
-  const voteDisabledReason = getVoteDisabledReason(proposal);
-  const executeDisabledReason = getExecuteDisabledReason(proposal);
-  const nextStep = getNextStep(proposal, snapshot, isLocalNetwork);
-
   return (
-    <div className="page-grid">
-      <Card>
-        <CardHeader>
-          <CardTitle>Governança</CardTitle>
-          <CardDescription>
-            Crie propostas de APR, vote com saldos AGRO delegados e execute atualizações aprovadas.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div style={{ display: "grid", gap: 20 }}>
-            <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-              <Button onClick={handleConnect} variant="secondary" disabled={isConnecting || !hasEthereum()}>
-                {isConnecting ? <Loader2 size={16} className="animate-spin" /> : <Wallet size={16} />}
-                {snapshot.address ? "Carteira conectada" : "Conectar carteira"}
-              </Button>
-            </div>
+    <div className="governance-layout">
+      <section className="staking-header">
+        <div>
+          <h1 className="mint-title">Governança</h1>
+          <p className="mint-subtitle">Vote em propostas e execute decisões aprovadas pela DAO com contexto claro e ações orientadas por estado.</p>
+        </div>
+        <div className="mint-wallet-pill">
+          <span className="status-dot status-dot--success" />
+          {snapshot.address ? `${snapshot.address.slice(0, 6)}...${snapshot.address.slice(-4)} · Sepolia` : "Sepolia · carteira nao conectada"}
+        </div>
+      </section>
 
-            <div style={{ display: "grid", gap: 12 }}>
-              <Label htmlFor="new-apr-bps">Novo APR (bps)</Label>
-              <p className="field-hint">Valor em basis points. Exemplo: `150000` representa uma APR alta para fins de demonstração.</p>
-              <Input
-                id="new-apr-bps"
-                value={newAprBps}
-                onChange={(event) => {
-                  const value = event.target.value;
-                  setNewAprBps(value);
-                  setDescription(`Definir APR do staking para ${value || "0"} bps`);
-                }}
-                placeholder="150000"
-              />
+      <section className="staking-metrics governance-metrics">
+        {metrics.map((metric) => (
+          <MetricCard key={metric.label} label={metric.label} value={metric.value} caption={metric.caption} highlight={metric.highlight} />
+        ))}
+      </section>
 
-              <Label htmlFor="proposal-description">Descrição da proposta</Label>
-              <p className="field-hint">Descreva a mudança com foco no efeito esperado no protocolo.</p>
-              <Input
-                id="proposal-description"
-                value={description}
-                onChange={(event) => setDescription(event.target.value)}
-                placeholder="Definir APR do staking para 150000 bps"
-              />
+      <div className="governance-tabs">
+        <button className="governance-tab governance-tab--active" type="button">Propostas</button>
+        <button className="governance-tab" type="button" disabled>Historico</button>
+        <button className="governance-tab" type="button" disabled>Delegacao</button>
+      </div>
 
-              <Button onClick={handlePropose} disabled={isProposing || missingAddressKeys.length > 0 || !newAprBps.trim()}>
-                {isProposing ? <Loader2 size={16} className="animate-spin" /> : <Vote size={16} />}
-                Criar proposta
-              </Button>
-            </div>
-
-            <div style={{ display: "grid", gap: 12 }}>
-              <Label htmlFor="proposal-id">ID da proposta</Label>
-              <Input
-                id="proposal-id"
-                value={proposalId}
-                onChange={(event) => setProposalId(event.target.value)}
-                placeholder="1"
-              />
-
-              {proposal.exists ? (
-                <div className="proposal-state-box">
-                  <div className="proposal-state-box__header">
-                    <span className={`proposal-state-badge proposal-state-badge--${proposal.state}`}>
-                      {proposalStateLabels[proposal.state]}
-                    </span>
-                    <strong>Proposta #{proposal.id}</strong>
-                  </div>
-                  <div className="proposal-state-grid">
-                    <StatusRow label="Bloco atual" value={snapshot.currentBlock} compact />
-                    <StatusRow label="Início da votação" value={proposal.snapshotBlock} compact />
-                    <StatusRow label="Fim da votação" value={proposal.deadlineBlock} compact />
-                    <StatusRow label="Quórum" value={snapshot.quorumVotes} compact />
-                    <StatusRow label="Votos a favor" value={proposal.forVotes} compact />
-                    <StatusRow label="Votos contra" value={proposal.againstVotes} compact />
-                  </div>
+      <div className="staking-grid governance-grid">
+        <div className="staking-main">
+          <Card className="staking-panel">
+            <CardHeader>
+              <div className="field-inline-header">
+                <div>
+                  <CardTitle>Nova proposta</CardTitle>
+                  <CardDescription>Informe o novo APR em percentual anual. A conversao para basis points ocorre automaticamente.</CardDescription>
                 </div>
-              ) : isProposalIdValid ? (
-                <div className="notice">Nenhuma proposta encontrada para esse ID ainda.</div>
-              ) : null}
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="mint-form-grid">
+                <div className="field-stack">
+                  <Label htmlFor="new-apr-percent">APR proposto (%)</Label>
+                  <Input
+                    id="new-apr-percent"
+                    value={aprPercentInput}
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      setAprPercentInput(value);
+                      setDescription(`Definir APR do staking para ${value || "0"}%`);
+                    }}
+                    placeholder="15"
+                  />
+                  <p className="field-hint">Equivale a {formatCompact(aprBpsValue)} bps.</p>
+                </div>
+                <div className="field-stack">
+                  <Label htmlFor="proposal-description">Descricao</Label>
+                  <Input
+                    id="proposal-description"
+                    value={description}
+                    onChange={(event) => setDescription(event.target.value)}
+                    placeholder="Definir APR do staking para 15%"
+                  />
+                </div>
+              </div>
+
+              <div className="stake-estimate-box">
+                <EstimateRow label="Threshold para propor" value={`${formatToken(snapshot.proposalThreshold)} AGRO`} />
+                <EstimateRow label="Seu poder de voto" value={`${formatToken(snapshot.votingPower)} AGRO`} />
+              </div>
+
+              <div className="staking-actions">
+                <Button onClick={handleConnect} variant="secondary" disabled={isConnecting || !hasEthereum()}>
+                  {isConnecting ? <Loader2 size={16} className="animate-spin" /> : <Wallet size={16} />}
+                  {snapshot.address ? "Carteira conectada" : "Conectar carteira"}
+                </Button>
+
+                <Button onClick={handlePropose} size="lg" disabled={isProposing || missingAddressKeys.length > 0 || !canCreateProposal}>
+                  {isProposing ? <Loader2 size={16} className="animate-spin" /> : <Vote size={16} />}
+                  Criar proposta
+                </Button>
+              </div>
+
+              {!canCreateProposal ? <p className="field-hint">Voce precisa ter votos delegados acima do threshold para criar proposta.</p> : null}
+            </CardContent>
+          </Card>
+
+          <div className="proposal-list">
+            {proposals.length === 0 ? (
+              <Card className="staking-panel">
+                <CardContent>
+                  <p className="card__description">Nenhuma proposta registrada ainda.</p>
+                </CardContent>
+              </Card>
+            ) : (
+              proposals.map((item) => {
+                const totalVotes = item.forVotes + item.againstVotes;
+                const forPercent = totalVotes > 0 ? (item.forVotes / totalVotes) * 100 : item.state === "executed" ? 100 : 0;
+                const againstPercent = totalVotes > 0 ? (item.againstVotes / totalVotes) * 100 : 0;
+                const isSelected = selectedProposalId === item.id;
+
+                return (
+                  <article key={item.id} className={`proposal-card${isSelected ? " proposal-card--selected" : ""}`} onClick={() => setSelectedProposalId(item.id)}>
+                    <div className="proposal-card__top">
+                      <span className={`proposal-state-badge proposal-state-badge--${item.state}`}>{stateLabels[item.state]}</span>
+                      <span className="card__description">Proposta #{item.id}</span>
+                    </div>
+                    <h3 className="proposal-card__title">{item.title}</h3>
+                    <p className="card__description">{item.description}</p>
+
+                    <div className="proposal-vote-summary">
+                      <span className="proposal-vote-summary__for">A favor · {formatToken(item.forVotes)} AGRO{totalVotes > 0 ? ` · ${Math.round(forPercent)}%` : ""}</span>
+                      <span className="proposal-vote-summary__against">Contra · {formatToken(item.againstVotes)} AGRO{totalVotes > 0 ? ` · ${Math.round(againstPercent)}%` : ""}</span>
+                    </div>
+
+                    <div className="proposal-vote-bar">
+                      <span className="proposal-vote-bar__for" style={{ width: `${forPercent}%` }} />
+                      <span className="proposal-vote-bar__against" style={{ width: `${againstPercent}%` }} />
+                    </div>
+
+                    <div className="proposal-meta-grid">
+                      <MetaMini label="Inicio da votacao" value={`bloco ${formatCompact(item.snapshotBlock)}`} />
+                      <MetaMini label="Fim da votacao" value={`bloco ${formatCompact(item.deadlineBlock)}`} />
+                      <MetaMini label="Quorum minimo" value={`${formatToken(snapshot.quorumVotes)} AGRO · ${item.quorumReached ? "atingido" : "pendente"}`} />
+                    </div>
+
+                    {item.state === "active" ? (
+                      <div className="proposal-inline-callout">
+                        Seu poder de voto disponivel: <strong>{formatToken(snapshot.votingPower)} AGRO</strong> · {item.hasVoted ? "voce ja votou nesta proposta" : "voce ainda nao votou nesta proposta"}
+                      </div>
+                    ) : null}
+
+                    <div className="proposal-actions-row">
+                      <Button onClick={() => void handleVote(true)} variant="outline" disabled={isVotingFor || item.state !== "active" || item.hasVoted || selectedProposalId !== item.id}>
+                        {isVotingFor && selectedProposalId === item.id ? <Loader2 size={16} className="animate-spin" /> : null}
+                        Votar a favor
+                      </Button>
+                      <Button onClick={() => void handleVote(false)} variant="outline" disabled={isVotingAgainst || item.state !== "active" || item.hasVoted || selectedProposalId !== item.id}>
+                        {isVotingAgainst && selectedProposalId === item.id ? <Loader2 size={16} className="animate-spin" /> : null}
+                        Votar contra
+                      </Button>
+                      <Button onClick={handleExecute} disabled={isExecuting || item.state !== "succeeded" || selectedProposalId !== item.id}>
+                        {isExecuting && selectedProposalId === item.id ? <Loader2 size={16} className="animate-spin" /> : null}
+                        Executar
+                      </Button>
+                    </div>
+
+                    <p className="field-hint">{getActionHint(item)}</p>
+                  </article>
+                );
+              })
+            )}
+          </div>
+        </div>
+
+        <div className="staking-side">
+          <Card className="staking-panel">
+            <CardHeader>
+              <CardTitle>Seu poder de voto</CardTitle>
+              <CardDescription>Contexto direto para decidir se voce pode propor, votar ou executar.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="reward-highlight">
+                <div>
+                  <strong className="reward-highlight__value">{formatToken(snapshot.votingPower)}</strong>
+                  <span className="reward-highlight__unit">AGRO</span>
+                </div>
+                <p className="card__description">tokens delegados para voto</p>
+              </div>
+
+              <div className="position-progress">
+                <div className="position-progress__head">
+                  <span>Threshold para propor</span>
+                  <strong>{snapshot.proposalThreshold > 0 ? `${Math.min((snapshot.votingPower / snapshot.proposalThreshold) * 100, 100).toFixed(1)}%` : "0%"}</strong>
+                </div>
+                <div className="position-progress__bar">
+                  <span style={{ width: `${snapshot.proposalThreshold > 0 ? Math.min((snapshot.votingPower / snapshot.proposalThreshold) * 100, 100) : 0}%` }} />
+                </div>
+              </div>
+
+              <Link href="/staking" className="dual-cta-link">Delegar mais AGRO</Link>
+            </CardContent>
+          </Card>
+
+          <Card className="staking-panel">
+            <CardHeader>
+              <CardTitle>Status da DAO</CardTitle>
+              <CardDescription>Resumo operacional do momento da governanca.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="status-checklist">
+                {statusItems.map((item) => (
+                  <div key={item.title} className="status-checklist__item">
+                    <span className={`status-dot status-dot--${item.tone}`} />
+                    <div>
+                      <strong>{item.title}</strong>
+                      <p className="card__description">{item.detail}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {txHash ? <div className="notice notice--success">Acao de governanca enviada. Confirme o resultado no hash e siga para a proxima etapa do ciclo.</div> : null}
+            </CardContent>
+          </Card>
+
+          <Card className="staking-panel">
+            <CardHeader>
+              <CardTitle>Ciclo de governanca</CardTitle>
+              <CardDescription>Resumo pedagógico do fluxo para a banca e para usuarios novos em Web3.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="how-it-works-list">
+                <HowStep index="1" text="Criar proposta com novo parametro e justificativa." />
+                <HowStep index="2" text="Votacao aberta pelo periodo de blocos definido." />
+                <HowStep index="3" text="Quorum atingido e proposta aprovada libera execucao." />
+                <HowStep index="4" text="Parametro atualizado no protocolo on-chain." />
+              </div>
 
               {isLocalNetwork ? (
-                <div style={{ display: "grid", gap: 10 }}>
-                  <Label>Ferramentas locais</Label>
-                  <p className="field-hint">No localhost, a DAO depende de novos blocos para liberar voto e execução.</p>
-                  <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+                <div className="local-tools-box">
+                  <strong>Ferramentas locais</strong>
+                  <div className="local-tools-actions">
                     <Button onClick={() => void handleMineBlocks(1)} variant="secondary" disabled={isMining}>
                       {isMining ? <Loader2 size={16} className="animate-spin" /> : null}
-                      Avançar 1 bloco
-                    </Button>
-                    <Button onClick={() => void handleMineBlocks(2)} variant="secondary" disabled={isMining}>
-                      {isMining ? <Loader2 size={16} className="animate-spin" /> : null}
-                      Avançar 2 blocos
+                      Avancar 1 bloco
                     </Button>
                     <Button onClick={() => void handleMineBlocks(20)} variant="secondary" disabled={isMining}>
                       {isMining ? <Loader2 size={16} className="animate-spin" /> : null}
-                      Avançar 20 blocos
+                      Avancar 20 blocos
                     </Button>
                   </div>
                 </div>
               ) : null}
-
-              <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-                <Button onClick={() => void handleVote(true)} variant="outline" disabled={isVotingFor || missingAddressKeys.length > 0 || !canVote}>
-                  {isVotingFor ? <Loader2 size={16} className="animate-spin" /> : null}
-                  Votar a favor
-                </Button>
-
-                <Button
-                  onClick={() => void handleVote(false)}
-                  variant="outline"
-                  disabled={isVotingAgainst || missingAddressKeys.length > 0 || !canVote}
-                >
-                  {isVotingAgainst ? <Loader2 size={16} className="animate-spin" /> : null}
-                  Votar contra
-                </Button>
-
-                <Button onClick={handleExecute} disabled={isExecuting || missingAddressKeys.length > 0 || !canExecute}>
-                  {isExecuting ? <Loader2 size={16} className="animate-spin" /> : null}
-                  Executar
-                </Button>
-              </div>
-
-              {voteDisabledReason ? <p className="field-hint">Voto indisponível: {voteDisabledReason}</p> : null}
-              {executeDisabledReason ? <p className="field-hint">Execução indisponível: {executeDisabledReason}</p> : null}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Status da governança</CardTitle>
-          <CardDescription>Resumo da carteira conectada e do estado da DAO.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div style={{ display: "grid", gap: 12 }}>
-            {hasSuccess ? (
-              <div className="notice notice--success">
-                Ação de governança enviada. Confirme o resultado no hash e use a próxima etapa para concluir o fluxo da DAO.
-              </div>
-            ) : null}
-
-            <StatusRow label="Carteira" value={snapshot.address || "Não conectada"} />
-            <StatusRow label="Total de propostas" value={snapshot.proposalCount} />
-            <StatusRow label="Bloco atual" value={snapshot.currentBlock} />
-            <StatusRow
-              label="Contratos configurados"
-              value={
-                missingAddressKeys.length === 0
-                  ? "Todos os endereços necessários estão configurados."
-                  : `Valores NEXT_PUBLIC ausentes para: ${missingAddressKeys.join(", ")}`
-              }
-            />
-            <StatusRow label="Última transação" value={txHash || "Nenhuma transação enviada ainda"} breakAll />
-            <StatusRow label="Erro" value={error || "Sem erros"} tone={error ? "error" : "muted"} breakAll />
-            <StatusRow label="Carregamento" value={isLoading ? "Atualizando estado da DAO..." : "Ocioso"} />
-            <StatusRow
-              label="Próximo passo"
-              value={nextStep}
-            />
-          </div>
-        </CardContent>
-      </Card>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
     </div>
   );
 }
@@ -498,118 +594,98 @@ function mapProposalState(state: number): ProposalStateKey {
   }
 }
 
-function getVoteDisabledReason(proposal: ProposalSnapshot) {
-  if (!proposal.exists) {
-    return "selecione uma proposta válida";
-  }
-
-  if (proposal.state === "pending") {
-    return "a proposta ainda não entrou na janela de votação";
-  }
-
-  if (proposal.state === "defeated") {
-    return "a proposta já foi derrotada";
+function getProposalStatusMessage(proposal: ProposalCardData) {
+  if (proposal.state === "active") {
+    return `Aguardando votos ate o bloco ${formatCompact(proposal.deadlineBlock)}.`;
   }
 
   if (proposal.state === "succeeded") {
-    return "a proposta já terminou e aguarda execução";
+    return "Aprovada e pronta para execucao.";
   }
 
   if (proposal.state === "executed") {
-    return "a proposta já foi executada";
-  }
-
-  if (proposal.state === "unknown") {
-    return "a proposta ainda não existe";
-  }
-
-  return "";
-}
-
-function getExecuteDisabledReason(proposal: ProposalSnapshot) {
-  if (!proposal.exists) {
-    return "selecione uma proposta válida";
+    return "Fluxo encerrado com execucao registrada em cadeia.";
   }
 
   if (proposal.state === "pending") {
-    return "a votação ainda não começou";
+    return `Aguardando abertura da votacao no bloco ${formatCompact(proposal.snapshotBlock)}.`;
   }
 
-  if (proposal.state === "active") {
-    return "a votação ainda está ativa";
-  }
+  return "Proposta acompanhada pela interface.";
+}
 
-  if (proposal.state === "defeated") {
-    return "a proposta não atingiu aprovação";
-  }
-
+function getActionHint(proposal: ProposalCardData) {
   if (proposal.state === "executed") {
-    return "a proposta já foi executada";
-  }
-
-  if (proposal.state === "unknown") {
-    return "a proposta ainda não existe";
-  }
-
-  return "";
-}
-
-function getNextStep(proposal: ProposalSnapshot, snapshot: GovernanceSnapshot, isLocalNetwork: boolean) {
-  if (!proposal.exists) {
-    return "Conecte a carteira com votos delegados, crie a proposta e acompanhe o estado para votar e executar no momento certo.";
-  }
-
-  if (proposal.state === "pending") {
-    return isLocalNetwork
-      ? `A proposta está pendente. Avance blocos até passar do bloco ${proposal.snapshotBlock} para liberar o voto.`
-      : `A proposta está pendente. Aguarde a rede avançar até depois do bloco ${proposal.snapshotBlock} para votar.`;
+    return "Proposta ja executada.";
   }
 
   if (proposal.state === "active") {
-    return `A votação está ativa até o bloco ${proposal.deadlineBlock}. Registre seu voto agora.`;
+    return proposal.hasVoted ? "Seu voto ja foi registrado nesta proposta." : "Votacao aberta. Registre seu voto antes do deadline.";
   }
 
   if (proposal.state === "succeeded") {
-    return "A proposta foi aprovada e já pode ser executada.";
+    return "Execucao liberada apos quorum e aprovacao.";
+  }
+
+  if (proposal.state === "pending") {
+    return "A votacao ainda nao comecou.";
   }
 
   if (proposal.state === "defeated") {
-    return `A proposta foi derrotada com ${proposal.forVotes} votos a favor e ${proposal.againstVotes} contra.`;
+    return "Proposta derrotada ou sem quorum suficiente.";
   }
 
-  if (proposal.state === "executed") {
-    return `A proposta já foi executada. O protocolo registrou a conclusão no bloco atual ${snapshot.currentBlock}.`;
-  }
-
-  return "Selecione uma proposta válida para consultar o estado da DAO.";
+  return "Acompanhe o estado da proposta.";
 }
 
-function StatusRow({
-  label,
-  value,
-  tone = "muted",
-  breakAll = false,
-  compact = false,
-}: {
-  label: string;
-  value: string;
-  tone?: "muted" | "error";
-  breakAll?: boolean;
-  compact?: boolean;
-}) {
+function MetricCard({ label, value, caption, highlight = false }: { label: string; value: string; caption: string; highlight?: boolean }) {
   return (
-    <div className={compact ? "status-row status-row--compact" : "status-row"}>
-      <Label>{label}</Label>
-      <p
-        className="card__description"
-        style={{
-          marginTop: 6,
-          color: tone === "error" ? "#fda4af" : undefined,
-          overflowWrap: breakAll ? "anywhere" : undefined,
-        }}
-      >
-        {value}
-      </p>
+    <article className={`metric-card${highlight ? " metric-card--highlight" : ""}`}>
+      <span className="metric-card__label">{label}</span>
+      <strong className="metric-card__value">{value}</strong>
+      <p className="metric-card__caption">{caption}</p>
+    </article>
+  );
+}
+
+function EstimateRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="estimate-row">
+      <span>{label}</span>
+      <strong>{value}</strong>
     </div>
   );
+}
+
+function MetaMini({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="proposal-meta-box">
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
+function HowStep({ index, text }: { index: string; text: string }) {
+  return (
+    <div className="how-step">
+      <span className="how-step__index">{index}</span>
+      <p>{text}</p>
+    </div>
+  );
+}
+
+function formatCompact(value: number) {
+  return new Intl.NumberFormat("pt-BR", {
+    notation: value >= 1_000_000 ? "compact" : "standard",
+    maximumFractionDigits: value >= 1000 ? 1 : value >= 10 ? 2 : 3,
+  }).format(value);
+}
+
+function formatToken(value: number) {
+  return `${formatCompact(value)} AGRO`;
+}
+
+function formatApr(bps: number) {
+  return `${formatCompact(bps / 10_000)}%`;
 }

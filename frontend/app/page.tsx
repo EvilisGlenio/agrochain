@@ -64,21 +64,21 @@ const steps = [
   {
     index: "01",
     title: "Emita um NFT de lote",
-    description: "Registre um lote com URI pública e tipo do produto para iniciar a demonstração de rastreabilidade.",
+    description: "Transforme um lote agro em um registro digital único, com metadados públicos e rastreabilidade verificável em blockchain.",
     href: "/mint",
     cta: "Ir para lotes",
   },
   {
     index: "02",
     title: "Faça staking de AGRO",
-    description: "Aprove o token, bloqueie saldo e acompanhe recompensas para demonstrar incentivos econômicos.",
+    description: "Bloqueie AGRO no protocolo para demonstrar incentivos econômicos, acúmulo de recompensa e participação ativa na rede.",
     href: "/staking",
     cta: "Ir para recompensas",
   },
   {
     index: "03",
     title: "Participe da governança",
-    description: "Crie uma proposta de APR, vote com saldo delegado e execute a decisão aprovada pela DAO.",
+    description: "Use votos delegados para propor mudanças, votar em parâmetros do sistema e executar decisões aprovadas pela DAO.",
     href: "/governanca",
     cta: "Ir para governança",
   },
@@ -160,7 +160,7 @@ export default function HomePage() {
       <section className="journey" aria-label="Como funciona">
         <div className="journey__header">
           <span className="hero__eyebrow">Como funciona</span>
-          <h3 className="overview__title">Um fluxo guiado para a banca entender o valor do protocolo.</h3>
+          <h3 className="overview__title">Da emissão do lote à execução da proposta, tudo acontece em um fluxo simples e verificável.</h3>
         </div>
 
         <div className="journey__steps">
